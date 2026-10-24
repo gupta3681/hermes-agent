@@ -13,7 +13,7 @@ from packaging.utils import parse_wheel_filename
 import pytest
 
 from pm.runtime import runtime_environment
-from scripts.bundles.payload import seal_pm_runtime
+from scripts.build.payload import seal_pm_runtime
 from tests.pm._fixtures import stage_host_python
 
 

@@ -187,7 +187,7 @@ export function productCurrent({ source, product, out, prepared }) {
       // live stamp says another, and packaging would then ship a bundle that
       // detectBundleSwap reports as replaced. A receipt with no recorded clock
       // predates this and stays comparable by hash alone. That branch is not a
-      // packaging hole: the release path (scripts/bundles/desktop.py) never consults
+      // packaging hole: the retired desktop release path never consults
       // this gate, it always stamps and compiles, and the source launchers that do
       // consult it reuse the dist already on disk rather than packaging a new bundle.
       && (saved.stampClock === undefined || saved.stampClock === stampClock(paths))

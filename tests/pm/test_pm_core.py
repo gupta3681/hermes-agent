@@ -709,7 +709,7 @@ def test_machine_matches_binary_elf(tmp_path):
 def test_bundle_closure_uv_stays_internal_node_npm_ship(monkeypatch, tmp_path):
     """Locks the semantics split: uv is pm's install machinery and never
     ships by closure, node/npm are runtime tools and always do."""
-    from scripts.bundles.native import _bundle_package_names
+    from scripts.build.native import _bundle_package_names
     from pm.lock import Lockfile
     from pm.registry import get_package
 
@@ -717,7 +717,7 @@ def test_bundle_closure_uv_stays_internal_node_npm_ship(monkeypatch, tmp_path):
     for name in ("uv", "node", "npm"):
         lock.set_pin(name, "1", {"any": {"url": "x", "sha256": "0" * 64}})
     lock.save()
-    monkeypatch.setattr("scripts.bundles.native._lockfile", lambda: lock)
+    monkeypatch.setattr("scripts.build.native._lockfile", lambda: lock)
     names = _bundle_package_names()
     # uv stays internal (off PATH, off the default install) but ships in
     # the bundle via the explicit whitelist — install machinery rides along.
@@ -731,7 +731,7 @@ def test_bundle_closure_uv_stays_internal_node_npm_ship(monkeypatch, tmp_path):
 def test_arch_guard_allows_emulated_x64_on_win32_arm64(monkeypatch, tmp_path):
     """agent-browser on win32-arm64 ships the x64 PE (emulated). The guard
     must not reject it when the package declares the target emulated."""
-    from scripts.bundles import native as cli
+    from scripts.build import native as cli
     from pm.lock import Facts, Lockfile
     from pm.registry import get_package
 
@@ -753,9 +753,9 @@ def test_arch_guard_allows_emulated_x64_on_win32_arm64(monkeypatch, tmp_path):
     lock = Lockfile(tmp_path / "lock.json")
     lock.set_pin("agent-browser", "0.35.1", {"any": {"url": "x", "sha256": "0" * 64}})
     lock.save()
-    monkeypatch.setattr("scripts.bundles.native._lockfile", lambda: lock)
-    monkeypatch.setattr("scripts.bundles.native.current_target", lambda: "win32-arm64")
-    monkeypatch.setattr("scripts.bundles.native.get_package", lambda name: get_package(name))
+    monkeypatch.setattr("scripts.build.native._lockfile", lambda: lock)
+    monkeypatch.setattr("scripts.build.native.current_target", lambda: "win32-arm64")
+    monkeypatch.setattr("scripts.build.native.get_package", lambda name: get_package(name))
 
     facts = Facts(store / "facts.json")
     facts.record("agent-browser", "0.35.1", entry.name, {}, store)

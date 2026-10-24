@@ -50,6 +50,7 @@ harness exports. Do not operate on the live VPS as a side effect of local develo
 | `hermes_platform/` | OS facts and executable lookup | `hermes_platform/AGENTS.md` |
 | `tui_gateway/`, `apps/shared/` | Shared backend RPC and generated client contracts; retained | `tui_gateway/AGENTS.md` |
 | `skills/`, `optional-skills/` | Reusable agent workflows | `skills/AGENTS.md` |
+| `scripts/build/`, `docker/build_agent.py` | Shared headless payload builds and assembly | `scripts/build/README.md`, `pm/AGENTS.md` |
 | `docs/jarvis/` | Our project guidance and testing scope | this file |
 
 Many root modules are facades. Search sibling modules for behavior rather than growing the
@@ -101,3 +102,6 @@ build are removed. Reference docs remain under `website/docs/`. Do not restore t
 as an automatic repair. IRC, ntfy, SimpleX, BlueBubbles, SMS/Twilio, and Photon iMessage
 adapters are also removed, along with Raft and the achievements dashboard plugin.
 See `docs/jarvis/PRUNING.md` for retained dependencies and verification.
+
+Desktop packaging/publication code under `scripts/bundles` is retired. Shared build code
+lives in `scripts/build`; source update readers must not import publisher implementations.

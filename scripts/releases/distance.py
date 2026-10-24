@@ -9,7 +9,7 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-from scripts.releases.versioning import version_from_tag
+from hermes_cli.release_refs import version_from_tag
 
 
 def _git(repo: Path, *args: str) -> str:

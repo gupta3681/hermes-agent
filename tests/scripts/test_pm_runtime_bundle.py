@@ -10,7 +10,7 @@ import pytest
 
 
 def _exercise_relocated_pm_runtime(tmp_path, monkeypatch):
-    from scripts.bundles import native
+    from scripts.build import native
 
     monkeypatch.setattr(Path, "home", lambda: tmp_path / "home")
     monkeypatch.setenv("HERMES_HOME", str(tmp_path / "home"))

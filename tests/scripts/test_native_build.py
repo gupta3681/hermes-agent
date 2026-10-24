@@ -12,29 +12,19 @@ import pytest
 from tests.pm._fixtures import stage_host_python
 
 ROOT = Path(__file__).resolve().parents[2]
-SCRIPT = ROOT / "scripts/bundles/native_build.py"
+SCRIPT = ROOT / "scripts/build/native_build.py"
 
 
-def test_payload_transport_does_not_require_or_export_desktop_inputs(tmp_path):
-    from scripts.ci.desktop_build_cache import describe_cache
-
-    source = tmp_path / "source"
-    source.mkdir()
-    cache = tmp_path / "cache"
-    description = describe_cache(source, cache, "payload-test")
-    assert set(description["paths"]) == {str(cache / name) for name in ("tools", "python/runtime", "native")}
-    assert "payload-test" in description["key"]
-    assert not cache.exists()
 
 
 def test_native_worker_passes_shared_toolchain_to_native_owner(tmp_path, monkeypatch):
-    from scripts.bundles import native_build
-    from scripts.bundles import desktop_toolchain, native
+    from scripts.build import native_build
+    from scripts.build import toolchain as desktop_toolchain, native
 
     request = {name: str(tmp_path / name) for name in ("source", "work", "cache", "out")}
     request["ref"] = "a" * 40
     selected = {"UV_CACHE_DIR": str(tmp_path / "native-wheel-identity"), "CC": "prepared-compiler"}
-    monkeypatch.setattr("scripts.bundles.desktop_prepare.require_source", lambda *args: None)
+    monkeypatch.setattr("scripts.build.source.require_source", lambda *args: None)
     prepared_tools = []
     def tools(source, work, cache, inherited):
         prepared_tools.append((source, work, cache))
@@ -54,7 +44,7 @@ def test_native_worker_passes_shared_toolchain_to_native_owner(tmp_path, monkeyp
 @pytest.mark.platforms("posix")
 def test_native_cli_consumes_real_minimal_preparation_without_bootstrap(tmp_path):
     from scripts.build.inputs import AgentInputs, RESOURCE_ENV
-    from scripts.bundles.native_prepared import publish_prepared
+    from scripts.build.native_prepared import publish_prepared
     from pm.store import current_target
 
     out = tmp_path / "payload"

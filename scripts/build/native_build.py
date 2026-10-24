@@ -15,9 +15,9 @@ if str(ROOT) not in sys.path:
 
 def prepare(source: Path, work: Path, cache: Path, out: Path, ref: str) -> Path:
     from hermes_cli.runtime_state import _lock
-    from scripts.bundles.desktop_prepare import git, require_source
-    from scripts.bundles.desktop_toolchain import run_preparation
-    from scripts.bundles.native_prepared import prepared_path
+    from scripts.build.source import git, require_source
+    from scripts.build.toolchain import run_preparation
+    from scripts.build.native_prepared import prepared_path
     from pm.lock import _write
 
     for path in (work, cache, out):
@@ -57,9 +57,9 @@ def prepare(source: Path, work: Path, cache: Path, out: Path, ref: str) -> Path:
 
 
 def prepare_in_worker(request: dict) -> Path:
-    from scripts.bundles.desktop_prepare import require_source
-    from scripts.bundles.desktop_toolchain import prepare_tools
-    from scripts.bundles.native import prepare_native
+    from scripts.build.source import require_source
+    from scripts.build.toolchain import prepare_tools
+    from scripts.build.native import prepare_native
 
     source, work, cache, out = (Path(request[name]) for name in ("source", "work", "cache", "out"))
     require_source(source, request["ref"])
@@ -98,13 +98,13 @@ def main() -> int:
             if not all((args.source, args.work, args.cache, args.out)):
                 parser.error("preparation requires --source, --work, --cache and --out")
             if args.commit:
-                from scripts.releases.commit_build import require_commit
+                from scripts.build.source import require_commit
                 require_commit(args.commit)
             prepared = prepare(args.source, args.work, args.cache, args.out, args.commit or args.ref or "HEAD")
             if args.prepare_only:
                 print(prepared)
                 return 0
-        from scripts.bundles.native import finish_native
+        from scripts.build.native import finish_native
         return finish_native(prepared, {})
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as exc:
         parser.exit(1, f"native build: {exc}\n")

@@ -159,7 +159,7 @@ def validate_request(value: object, *, repository: str | None = None,
             raise ChannelError("Release package version mismatch")
         archive_ref = request.get("archiveRef")
         if archive_ref is not None:
-            from scripts.releases.versioning import parse_attempt_ref
+            from hermes_cli.release_refs import parse_attempt_ref
             parsed = parse_attempt_ref(archive_ref) if isinstance(archive_ref, str) else None
             if parsed is None:
                 if archive_ref != request["releaseTag"]:

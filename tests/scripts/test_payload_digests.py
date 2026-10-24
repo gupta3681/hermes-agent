@@ -9,7 +9,7 @@ import pytest
 
 from pm.lock import Facts, Lockfile
 from pm.store import current_target, tree_digest
-from scripts.bundles import payload
+from scripts.build import payload
 
 
 def _payload(tmp_path):

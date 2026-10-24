@@ -23,7 +23,7 @@ if str(ROOT) not in sys.path:
 # updates to the channel updater), and linux_desktop_entry degrades to the
 # themed icon when apps/desktop/assets is absent. Excluded here means:
 # not packaged, not compiled, not baked. Frontend product staging
-# (scripts/bundles/stage.py) needs its full tree and passes no exclusions.
+# Callers that need a complete source snapshot pass no exclusions.
 INERT_SNAPSHOT_DIRS = (
     "tests", "tests-js", "website", "evals", ".github", "nix", "docker",
     "apps", "ui-tui", "web", "scripts",

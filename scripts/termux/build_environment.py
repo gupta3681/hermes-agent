@@ -13,7 +13,7 @@ if __package__ in (None, ""):
 
 def prepare_tools(source: Path, root: Path) -> None:
     from pm.paths import lockfile_path
-    from scripts.bundles.payload import record_tools
+    from scripts.build.payload import record_tools
 
     store = root / "tools"
     store.mkdir(parents=True, exist_ok=True)
@@ -36,7 +36,7 @@ def application(root: Path, requirements: Path, python: Path) -> None:
 
 def assemble(root: Path, requirements: Path, python: Path) -> None:
     from pm import stage_manager_runtime
-    from scripts.bundles.payload import seal_pm_runtime
+    from scripts.build.payload import seal_pm_runtime
 
     prepare_tools(root / "tools", root)
     manager = stage_manager_runtime(

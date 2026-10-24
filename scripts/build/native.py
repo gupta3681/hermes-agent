@@ -87,7 +87,7 @@ def stage_pm_runtime(root: Path, python: Path, repo: Path, *, offline: bool = Fa
                      cache: Path | None = None) -> None:
     """Publish the same PM dependency graph as source installs, ready offline."""
     from pm import stage_manager_runtime
-    from scripts.bundles.payload import seal_pm_runtime
+    from scripts.build.payload import seal_pm_runtime
 
     destination = root / "pm-runtime"
     if destination.exists():
@@ -124,10 +124,8 @@ def stage_native(args) -> int:
                "XDG_CONFIG_HOME": str(Path(work) / "config"),
                "UV_CACHE_DIR": str(cache),
                "PYTHONPATH": os.pathsep.join([str(root), *filter(None, sys.path)])}
-        command = [sys.executable, "-B", "-m", "scripts.bundles.native", "--out", str(out),
+        command = [sys.executable, "-B", "-m", "scripts.build.native", "--out", str(out),
                    "--ref", args.ref or "HEAD", "--source", str(root)]
-        for name, product in getattr(args, "frontends", {}).items():
-            command += [f"--{name}", str(product)]
         return subprocess.run(command, cwd=root, env=env, check=False).returncode
 
 
@@ -157,7 +155,7 @@ def prepare_native(*, out: Path, ref: str, source: Path, cache: Path,
     The caller supplies its compiler environment; only the full standalone
     wrapper provisions machine prerequisites and isolates HOME.
     """
-    from scripts.bundles.native_prepared import preparation_lock, prepared_path
+    from scripts.build.native_prepared import preparation_lock, prepared_path
 
     out = Path(out).absolute()
     if out != out.resolve():
@@ -178,7 +176,7 @@ def _prepare_native(*, out: Path, ref: str, source: Path, cache: Path,
     store_dir = out / "tools"
     store_dir.mkdir(parents=True, exist_ok=True)
     repo_dir = out / "hermes-agent"
-    from scripts.bundles.payload import INERT_SNAPSHOT_DIRS, snapshot
+    from scripts.build.payload import INERT_SNAPSHOT_DIRS, snapshot
     revision = subprocess.check_output(
         ["git", "rev-parse", "--verify", f"{ref}^{{commit}}"], cwd=source,
         text=True, encoding="utf-8").strip()
@@ -278,18 +276,18 @@ def _prepare_native(*, out: Path, ref: str, source: Path, cache: Path,
         print(f"✗ arch: {line}")
     if bad:
         raise InstallError("tools", "native architecture verification failed")
-    from scripts.bundles.payload import record_tools
+    from scripts.build.payload import record_tools
     recorded = {name: fact["entry"] for name in names if (fact := facts.get(name)) and "entry" in fact}
     record_tools(out, paths.lockfile_path(), current_target(), recorded)
     from scripts.build.inputs import AgentInputs, RESOURCE_ENV, dependency_site
-    from scripts.bundles.native_prepared import publish_prepared
+    from scripts.build.native_prepared import publish_prepared
 
     site = dependency_site(venv_dir, python_fact["version"], current_target())
     (site / "hermes-agent.pth").write_text(
         Path(os.path.relpath(repo_dir, site)).as_posix() + "\n", encoding="utf-8")
-    from scripts.bundles.payload import relativize_links
+    from scripts.build.payload import relativize_links
     relativize_links(out)
-    from scripts.bundles.bytecode import bake_bytecode
+    from scripts.build.bytecode import bake_bytecode
     baked = bake_bytecode(out, python_bin)
     print(f"✓ baked bytecode ({baked['modules']} modules, unchecked-hash, read-only caches)")
     inputs = AgentInputs(
@@ -307,7 +305,7 @@ def finish_native(prepared: Path, frontends: dict[str, Path]) -> int:
     """Consume verified job-local paths. No dependency acquisition or repair."""
     from scripts.build.agent import assemble
     from scripts.build.inputs import AgentInputs
-    from scripts.bundles.native_prepared import load_prepared, preparation_lock
+    from scripts.build.native_prepared import load_prepared, preparation_lock
 
     prepared = Path(prepared).absolute()
     if not prepared.name.endswith(".prepared.json") or not prepared.is_file():
@@ -336,7 +334,7 @@ def _stage_native(args) -> int:
             cache=Path(getattr(args, "cache", None) or os.environ["UV_CACHE_DIR"]),
             tools=getattr(args, "tools", None),
         )
-        return finish_native(prepared, getattr(args, "frontends", {}))
+        return finish_native(prepared, {})
     except (InstallError, FeatureProbeError) as exc:
         print(f"✗ {exc}")
         return 1
@@ -349,10 +347,7 @@ def main() -> int:
     parser.add_argument("--out", required=True)
     parser.add_argument("--ref", default="HEAD")
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--tui", type=Path)
-    parser.add_argument("--web", type=Path)
     args = parser.parse_args()
-    args.frontends = {name: path for name in ("tui", "web") if (path := getattr(args, name)) is not None}
     return _stage_native(args)
 
 

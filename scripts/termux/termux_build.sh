@@ -221,7 +221,7 @@ python3 - "$REPO_ABS" "$REF" "$WORK/tree" <<'PY'
 import sys
 from pathlib import Path
 sys.path.insert(0, sys.argv[1])
-from scripts.bundles.payload import snapshot
+from scripts.build.payload import snapshot
 snapshot(Path(sys.argv[1]), sys.argv[2], Path(sys.argv[3]))
 PY
 [ -f "$WORK/tree/pyproject.toml" ] || fail "archived tag tree has no pyproject.toml -- bad tag?"

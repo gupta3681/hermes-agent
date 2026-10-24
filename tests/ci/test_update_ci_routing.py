@@ -285,7 +285,6 @@ def test_every_set_lane_reaches_its_consumer_whatever_the_other_lanes_say(combo)
 # One-file changes from the review's direct classifier run (acceptance/classifier.json),
 # and the suites each must dispatch on a pull request.
 _R15_CASES = {
-    "scripts/build/desktop.mjs": ("e2e_upgrade",),
     "scripts/build/web.mjs": ("e2e_upgrade",),
     "hermes_cli/_subprocess_compat.py": ("e2e_upgrade",),
     "hermes_cli/desktop_build_lock.py": ("e2e_upgrade",),

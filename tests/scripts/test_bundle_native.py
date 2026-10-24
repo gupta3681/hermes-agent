@@ -16,7 +16,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from scripts.bundles import native
+from scripts.build import native
 
 
 def test_bundle_stages_git_tree_and_runs_native_children_before_manifest(tmp_path, monkeypatch):
@@ -177,7 +177,7 @@ def test_bundle_stages_git_tree_and_runs_native_children_before_manifest(tmp_pat
     assert not prepared.is_relative_to(output)
     assert prepared.is_file()
     assert not (output / "manifest.json").exists()
-    from scripts.bundles.native_prepared import load_prepared, preparation_lock
+    from scripts.build.native_prepared import load_prepared, preparation_lock
     with preparation_lock(output):
         with pytest.raises(ValueError, match="already in use"):
             native.finish_native(prepared, {})
@@ -215,7 +215,7 @@ def test_bundle_stages_git_tree_and_runs_native_children_before_manifest(tmp_pat
     # when its link text itself is freshly covered by the stored digest.
     linked = moved / "escape"
     linked.symlink_to(witness)
-    from scripts.bundles.native_prepared import _source_digest
+    from scripts.build.native_prepared import _source_digest
     inventory["digests"]["hermes-agent"] = _source_digest(moved)
     prepared.write_text(json.dumps(inventory), encoding="utf-8")
     with pytest.raises(ValueError, match="run preparation again"):
@@ -621,7 +621,7 @@ def test_native_dispatch_child_environment(tmp_path, monkeypatch, cache_source, 
     observed = tmp_path / "child.json"
 
     def child(command, *, cwd, env, check):
-        assert command[command.index("-m") + 1] == "scripts.bundles.native"
+        assert command[command.index("-m") + 1] == "scripts.build.native"
         return run([sys.executable, "-c",
                     "import os,json,sys; from pathlib import Path; "
                     "Path(sys.argv[1]).write_text(json.dumps(dict(os.environ))); "

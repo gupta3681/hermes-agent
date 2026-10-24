@@ -106,7 +106,7 @@ def assemble(inputs: AgentInputs, out: Path) -> dict:
         if source is not None:
             _copy(source, destination)
     if inputs.placement == "contained":
-        from scripts.bundles.payload import relativize_links
+        from scripts.build.payload import relativize_links
         relativize_links(out)
     def location(path: Path) -> str:
         return path.relative_to(out).as_posix() if path.is_relative_to(out) and not referenced else str(path)

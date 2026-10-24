@@ -814,7 +814,7 @@ def cmd_repair(args) -> int:
 
 
 def cmd_bundle(args) -> int:
-    from scripts.bundles.native import stage_native
+    from scripts.build.native import stage_native
     return stage_native(args)
 
 

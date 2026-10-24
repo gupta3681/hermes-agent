@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.bundles.bytecode import MARKER, bake_bytecode
+from scripts.build.bytecode import MARKER, bake_bytecode
 
 
 def _make_payload(root: Path) -> Path:
@@ -52,7 +52,7 @@ def test_uncovered_reports_parseable_module_without_pyc(tmp_path):
     from importlib.util import cache_from_source
     root = _make_payload(tmp_path)
     bake_bytecode(root, Path(sys.executable))
-    from scripts.bundles.bytecode import _uncovered
+    from scripts.build.bytecode import _uncovered
     missing, unparseable = _uncovered(root / "hermes-agent")
     assert missing == [] and unparseable == 0
     pyc = Path(cache_from_source(root / "hermes-agent" / "pkg" / "mod.py"))

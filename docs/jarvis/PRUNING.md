@@ -117,3 +117,31 @@ Third-pass verification: all 255 affected tests passed across seven files, inclu
 complete backend web-server suite, shared wake/admission, child-process credential
 scrubbing, plugin setup, registry, and the Jarvis contracts. All 12 repository checks
 passed. No container image or production service was changed.
+
+## Fourth pass: extract shared bundling and retire desktop release tooling
+
+Moved snapshots, portable links, PM runtime sealing, tool facts, native preparation,
+prepared-input validation, bytecode baking and child build environments to `scripts/build`.
+`hermes pm bundle`, the container assembler, and Termux helpers now import that layer.
+The shared source-admission helpers no longer depend on desktop preparation. Runtime
+channel readers and container identity checks parse release refs through
+`hermes_cli/release_refs.py`, with no publisher import.
+
+Removed the `scripts/bundles` package, desktop signing/packaging entrypoints, MSIX/Store
+composition, desktop build-cache action, desktop build recipe, release orchestrators,
+channel publishers, desktop feed finalization/pruning and their dedicated tests. DMG
+creation is no longer registered or pinned in PM. Ordinary install stamps continue to
+work; the retired desktop `--channel-request` stamping extension is removed.
+
+Retained general CI object storage, upload receipts, attribution, source-version validation,
+container publication, and runtime update readers. Existing runtime/update compatibility
+helpers are distinct from the retired release publisher; this change does not set a new
+Jarvis release policy or deploy an update service. Channel-reader tests now construct
+synthetic records directly instead of calling the retired publisher.
+
+Fourth-pass verification: the 46-file regression run passed 630 tests with 12 platform
+skips; a focused rerun after the final native/transport edits passed 62 tests, including
+offline wheelhouse rebuilding. Nine new source-admission cases passed. Both retained JS
+workspaces passed their checks (88 tests), and all 12 repository guards passed; Ruff was
+rerun after the final test annotation. Shell syntax and the new native-builder CLI were
+also checked. Docker image execution remains unverified because the local daemon is down.

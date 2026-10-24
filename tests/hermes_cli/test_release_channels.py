@@ -3,15 +3,10 @@ from copy import deepcopy
 import hashlib
 import json
 from pathlib import Path
-import importlib.util
 
 import pytest
 
-# The HTTP fixture is shared without making tests/ an importable package.
-_spec = importlib.util.spec_from_file_location("channel_http_fixture", Path(__file__).parents[1] / "scripts/test_release_channels.py")
-_fixture = importlib.util.module_from_spec(_spec)
-_spec.loader.exec_module(_fixture)
-object_server, publisher = _fixture.object_server, _fixture.publisher
+from tests.fixtures.channel_http import object_server, publisher, preview_identity
 
 
 def seed_manifest(pub, request, objects):
@@ -194,38 +189,6 @@ def test_reader_rejects_cycles_identity_substitution_and_cross_authority():
             reader.resolve("alpha")
 
 
-def test_legacy_bootstrap_uses_real_archive_keys_and_source_main_has_no_bundle():
-    from hermes_cli.release_channels import canonical_json, ChannelError
-    with object_server() as (url, objects, _headers, _requests, _faults):
-        pub = publisher(url, verify_build=lambda request, manifest: True)
-        preview = pub.create("temporary")
-        request = pub.allocate("temporary", "a" * 40, "2.0.0")
-        manifest, _ = seed_manifest(pub, request, objects)
-        for name, policy, tag in [("stable", "stable-release", "v2.0.0"), ("canary", "canary-release", "v2.1.0+canary.20260913T000100Z")]:
-            legacy = deepcopy(manifest)
-            legacy["request"].update(channel=name, buildId=("a" if name == "stable" else "b") * 32,
-                                     releaseTag=tag, version=tag[1:], windowsVersion="2.0.0.0" if name == "stable" else "2.1.0.10")
-            legacy["packages"][0].update(version=tag[1:])
-            legacy["packages"][0]["artifact"]["key"] = f"releases/tag/{tag}/actual.zip"
-            legacy["packages"][0]["feed"]["key"] = f"releases/tag/{tag}/stable-mac.yml"
-            record = dict(preview, name=name, policy=policy, nextSequence=2,
-                          head={"buildId": legacy["request"]["buildId"], "sequence": 1,
-                                "manifestKey": "releases/channel-builds/" + legacy["request"]["buildId"] + "/build.json",
-                                "sha256": hashlib.sha256(canonical_json(legacy)).hexdigest()})
-            pub.bootstrap(record, legacy, publish=True)
-            assert pub.reader.resolve(name).manifest == legacy
-            assert pub.request(legacy["request"]["buildId"]) == legacy["request"]
-            from hermes_cli.release_channels import validate_request
-            invalid_versions = ["2.1.0.65536", "65536.1.0.0", "2.1.0.-1", "2.1.0.1.0", "2.1.0.x"]
-            if policy == "stable-release":
-                invalid_versions.append("2.0.0.10")
-            for windows_version in invalid_versions:
-                with pytest.raises(ChannelError, match="Windows version"):
-                    validate_request(dict(legacy["request"], windowsVersion=windows_version), policy=policy)
-            with pytest.raises(ChannelError, match="Protected"):
-                pub.promote(legacy["request"]["buildId"])
-            with pytest.raises(ChannelError, match="Protected"):
-                pub.allocate(name, "a" * 40, "2.0.0")
 
 
 @pytest.mark.parametrize("sequence", [1, 65535, 65536, 2**32 - 1])
@@ -275,7 +238,6 @@ def test_malformed_record_and_unqualified_retirement_never_resolve():
 @pytest.mark.parametrize("field,value", [("policy", []), ("state", {}), ("revision", True), ("head", []), ("identity", None)])
 def test_malformed_wire_types_are_channel_errors(field, value):
     from hermes_cli.release_channels import validate_record, ChannelError
-    from scripts.releases.channels import preview_identity
     record = {"schema": 1, "name": "arbitrary", "repository": "example/hermes-agent", "policy": "preview",
               "state": "active", "revision": 1, "nextSequence": 1, "head": None,
               "identity": preview_identity("arbitrary", "a" * 16)}
@@ -285,7 +247,6 @@ def test_malformed_wire_types_are_channel_errors(field, value):
 
 
 def stable_request(version="1.2.3", archive_ref=None):
-    from scripts.releases.channels import preview_identity
     request = {"schema": 1, "buildId": "a" * 32, "channel": "stable", "sequence": 1,
                "repository": "example/hermes-agent", "commit": "b" * 40,
                "sourceVersion": version, "version": version, "windowsVersion": version + ".0",
@@ -343,7 +304,7 @@ def test_archive_ref_must_name_the_release_version():
 
 @pytest.mark.parametrize("ref", ["rc.1-v0.21.5", "rc.12-v1.0.0"])
 def test_attempt_ref_shapes_are_attempt_refs(ref):
-    from scripts.releases.versioning import parse_attempt_ref
+    from hermes_cli.release_refs import parse_attempt_ref
     assert parse_attempt_ref(ref) is not None
 
 

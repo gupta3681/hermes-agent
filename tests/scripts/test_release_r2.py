@@ -40,12 +40,9 @@ from scripts.releases.r2 import (
     commit_page_key_for,
     commit_prefix_for,
     encode_key_path,
-    feed_referenced_keys,
     public_base_url,
     public_url_for,
-    referenced_feed_bundle_filenames,
     rfc3986_encode,
-    stale_feed_bundle_keys,
 )
 
 from scripts.releases.r2_scope import R2Scope, channel_public_base
@@ -116,15 +113,6 @@ def test_disposable_scope_streams_lists_and_never_touches_production(r2_server, 
     # Scoping is opt-in via R2_DISPOSABLE_RUN alone: there is no fork isolation
     # to assert after the fork-conditional dispatch was dropped.
     assert r2_server.requests == before
-    from scripts.releases.channel_disposable import probe
-    from scripts.releases.channels import ChannelPublisher, R2ChannelStore
-    unscoped = ChannelPublisher(R2ChannelStore(creds, base, bucket), "fixture/fork", root,
-                                authorize=lambda *_: None)
-    with pytest.raises(ValueError, match="disposable"):
-        probe(unscoped, "a" * 40, "1.2.3", "b" * 40)
-    assert r2_server.requests == before
-
-
 # ── SigV4 vectors ───────────────────────────────────────────────────────────
 
 @pytest.mark.parametrize('method,path,query,payload,scope,signature', [
@@ -293,38 +281,14 @@ CANARY_FEED_XML = (
 )
 
 
-def test_referenced_feed_bundle_filenames_reads_main_package_only():
-    names = referenced_feed_bundle_filenames(CANARY_FEED_XML)
-    assert names == ["HermesBundled-0.27.2.9-win.msixbundle"]
-    # The AppInstaller ROOT Uri (the feed pointer itself) must NOT count.
-    assert "canary.appinstaller" not in names
-    assert referenced_feed_bundle_filenames("") == []
-    assert referenced_feed_bundle_filenames("<html>ServiceUnavailable</html>") == []
-    # A bundle Uri OUTSIDE MainPackage/MainBundle is not a reference.
-    assert referenced_feed_bundle_filenames('<Foo Uri="https://x/HermesBundled-1.0.0-win.msixbundle" />') == []
 
 
-def test_feed_referenced_keys_protects_bundle_and_absolute_tag_uris():
-    tag_feed = CANARY_FEED_XML.replace(
-        'Uri="https://r2.example/releases/win32/canary/HermesBundled-0.27.2.9-win.msixbundle"',
-        'Uri="https://r2.example/releases/tag/v0.27.2+canary.20260829T000000Z/HermesBundled-0.27.2-win-x64.msix"',
-    )
-    keys = feed_referenced_keys("releases/win32/canary", tag_feed)
-    assert "releases/win32/canary/HermesBundled-0.27.2-win-x64.msix" in keys
-    assert "releases/tag/v0.27.2+canary.20260829T000000Z/HermesBundled-0.27.2-win-x64.msix" in keys
 
 
 CANARY_DIR = "releases/win32/canary"
 CUTOFF_MS = 1787356800  # 2026-08-21T00:00:00Z
 
 
-@pytest.mark.parametrize("unknown", [None, float("nan"), float("inf")])
-def test_stale_feed_bundle_keys_missing_lastmodified_keeps_object(unknown):
-    keys = [f'{CANARY_DIR}/unreferenced.msixbundle']
-    metadata = {key: unknown for key in keys}
-    doomed = stale_feed_bundle_keys(keys, {CANARY_DIR: [CANARY_FEED_XML]}, metadata, CUTOFF_MS)
-    assert doomed == []
-    assert stale_feed_bundle_keys(keys, {CANARY_DIR: [None]}, {keys[0]: 0}, CUTOFF_MS) == []
 
 
 # ── Real loopback HTTP protocol tests ───────────────────────────────────────
@@ -674,36 +638,6 @@ def test_list_cli_paginates_and_decodes_keys(r2_server, capsys):
     assert capsys.readouterr().out.splitlines() == keys
 
 
-@pytest.mark.parametrize('bad_feed', [None, b'', b'<html>boom</html>',
-    b'<Foo Uri="https://x/old.msixbundle" />', b'<MainPackage Uri="https://x/old.msixbundle" />',
-    b'<AppInstaller><MainBundle Uri="https://x/old.msixbundle" />'])
-def test_real_prune_retention_and_second_feed_failure(r2_server, capsys, bad_feed):
-    tag_reference = 'releases/tag/v0.27.2+canary.20260801T000000Z/live.msixbundle'
-    second = f'<AppInstaller><MainBundle Uri="https://cdn.example/{tag_reference}" /></AppInstaller>'
-    doomed = {f'{CANARY_DIR}/old.msixbundle', 'releases/tag/v0.27.2+canary.20260801T000000Z/old.zip'}
-    kept = {f'{CANARY_DIR}/HermesBundled-0.27.2.9-win.msixbundle', f'{CANARY_DIR}/live.msixbundle',
-            f'{CANARY_DIR}/fresh.msixbundle', f'{CANARY_DIR}/unknown.msixbundle', tag_reference,
-            'releases/win32/stable/old.msixbundle', 'releases/unknown/old.msixbundle',
-            'releases/tag/v0.28.0/old.zip', 'releases/tag/v0.28.0+canary.20260904T000000Z/today.zip'}
-    r2_server.store.update({key: (b'artifact', '"e"') for key in doomed | kept})
-    r2_server.store[f'{CANARY_DIR}/canary.appinstaller'] = (CANARY_FEED_XML.encode(), '"e"')
-    r2_server.store[f'{CANARY_DIR}/second.appinstaller'] = (second.encode() if bad_feed is None else bad_feed, '"e"')
-    r2_server.store['releases/win32/stable/stable.appinstaller'] = (CANARY_FEED_XML.encode(), '"e"')
-    r2_server.last_modified[f'{CANARY_DIR}/fresh.msixbundle'] = '2026-09-03T00:00:00Z'
-    r2_server.last_modified[f'{CANARY_DIR}/unknown.msixbundle'] = None
-    r2_server.page_size = 3
-    before = dict(r2_server.store)
-    if bad_feed is not None:
-        with pytest.raises(RuntimeError, match='refusing to prune'):
-            r2.prune(keep_days=14, now_epoch=1788547200)
-        assert r2_server.store == before
-        assert not any(method == 'DELETE' for method, _, _ in r2_server.requests)
-        return
-    r2.prune(keep_days=14, dry_run=True, now_epoch=1788547200)
-    assert {line.removeprefix('(dry-run) would delete r2:') for line in capsys.readouterr().out.splitlines()} == doomed
-    assert r2_server.store == before and not any(method == 'DELETE' for method, _, _ in r2_server.requests)
-    r2.prune(keep_days=14, now_epoch=1788547200)
-    assert set(r2_server.store) == set(before) - doomed
 
 
 def test_cli_usage_rejects_unknown_flags(capsys):

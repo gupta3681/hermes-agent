@@ -62,9 +62,6 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
         lock.set_pin(name, "fixture", {})
         Facts(store / "facts.json").record(name, "fixture", name, {"PATH": [str(binary.parent)]}, store,
                                           target=target, digest=tree_digest(entry))
-    # The application lock also pins build-only suppliers. A CLI takeover must
-    # not select them as runtime roots, even when they cannot run on this host.
-    lock.set_pin("dmgbuild", "fixture", {})
     lock.save()
     # Probe the selected-interpreter boundary; app completion orchestration has
     # its own contract tests. This script cannot import the dep from the parent.
@@ -87,7 +84,6 @@ def test_fresh_takeover_prepares_generation_and_runs_selected_python(tmp_path):
     assert Path(output['dep']).is_relative_to(home / "installs")
     assert (root / ".hermes/bin/hermes").is_file()
     assert not (root / "venv").exists()
-    assert Facts(store / "facts.json").get("dmgbuild") is None
     venv_fact = json.loads(next((home / "installs").glob("*/facts.json")).read_text())["packages"]["venv"]
     assert "matrix" not in venv_fact["extras"]
 

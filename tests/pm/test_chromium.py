@@ -6,7 +6,7 @@ import pytest
 from pm.lock import Facts
 from pm.packages import Chromium
 from pm.registry import walk
-from scripts.bundles.native import _bundle_package_names
+from scripts.build.native import _bundle_package_names
 
 
 def test_browser_closure_and_bundle_ship_full_chromium_only():

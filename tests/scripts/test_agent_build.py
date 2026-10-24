@@ -289,23 +289,6 @@ def test_payload_smoke_uses_relocated_manifest_commands(tmp_path):
         assert 'SMOKE OK' not in escaped.stdout
 
 
-@pytest.mark.platforms("posix")
-def test_stage_passes_explicit_products_to_the_single_assembler(tmp_path, monkeypatch):
-    from scripts.bundles import stage
-    from scripts.build.agent import assemble
-    from scripts.build.inputs import AgentInputs
-
-    out, data = inputs_fixture(tmp_path)
-    calls = []
-    def native(args):
-        calls.append(args.frontends)
-        assemble(AgentInputs.from_dict({**data, "frontends": args.frontends}), out)
-        return 0
-    monkeypatch.setattr(stage, "stage_native", native)
-    assert stage.main(["--out", str(out), "--ref", "fixture", "--tui", data["frontends"]["tui"],
-                       "--web", data["frontends"]["web"]]) == 0
-    assert calls == [{k: Path(v) for k, v in data["frontends"].items()}]
-    assert json.loads((out / "manifest.json").read_text())["runtime"]["commands"] == {"probe": "bin/probe"}
 
 
 @pytest.mark.platforms("posix")
@@ -332,33 +315,3 @@ def test_site_layout_uses_explicit_target_version_not_builder_python(tmp_path):
     from scripts.build.inputs import dependency_site
     assert dependency_site(tmp_path, "3.99.1+vendor", "linux-x64") == tmp_path / "lib/python3.99/site-packages"
     assert dependency_site(tmp_path, "3.99.1", "win32-arm64") == tmp_path / "Lib/site-packages"
-
-
-def test_automatic_frontends_use_requested_snapshot_not_current_checkout(tmp_path, monkeypatch):
-    from scripts.bundles import stage
-    repo = tmp_path / "checkout"
-    repo.mkdir()
-    subprocess.run(["git", "init", str(repo)], check=True, capture_output=True)
-    project = repo / "pyproject.toml"
-    project.write_text('[project]\nversion="1"\n', encoding="utf-8")
-    subprocess.run(["git", "add", "."], cwd=repo, check=True)
-    subprocess.run(["git", "-c", "user.name=Fixture", "-c", "user.email=f@example.test", "commit", "-m", "selected"], cwd=repo, check=True, capture_output=True)
-    revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repo, text=True).strip()
-    project.write_text('[project]\nversion="dirty-current"\n', encoding="utf-8")
-    monkeypatch.setattr(stage, "ROOT", repo)
-    monkeypatch.setattr("scripts.build.icon_environment.prepare_icon_environment",
-                        lambda source, out, cache: sys.executable)
-    monkeypatch.setattr(stage.shutil, "which", lambda name: "/prepared/node")
-    real_run = subprocess.run
-    built_sources = []
-    def run(command, **kwargs):
-        if command[0] != "/prepared/node":
-            return real_run(command, **kwargs)
-        source = Path(command[command.index("--source") + 1])
-        built_sources.append(source)
-        assert source != repo
-        assert 'version="1"' in (source / "pyproject.toml").read_text()
-    monkeypatch.setattr(stage.subprocess, "run", run)
-    monkeypatch.setattr(stage, "stage_native", lambda args: 0)
-    assert stage.main(["--out", str(tmp_path / "out"), "--ref", revision]) == 0
-    assert len(built_sources) == 4

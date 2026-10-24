@@ -13,7 +13,7 @@ import pytest
 
 
 def test_bootstrap_environment_isolates_owned_paths_without_mutating_caller(tmp_path):
-    toolchain = importlib.import_module("scripts.bundles.desktop_toolchain")
+    toolchain = importlib.import_module("scripts.build.toolchain")
     source, work, cache = (tmp_path / name for name in ("source", "work", "cache"))
     original_home = tmp_path / "live-user"
     inherited = {
@@ -88,7 +88,7 @@ def test_bootstrap_environment_isolates_owned_paths_without_mutating_caller(tmp_
 def test_rust_sdists_build_outside_the_nested_uv_cache(tmp_path):
     # Windows link.exe has no long-path support: target/ inside uv's sdist entry
     # under the cache exceeded MAX_PATH (LNK1104) when obstore compiled cold.
-    from scripts.bundles.desktop_toolchain import bootstrap_environment
+    from scripts.build.toolchain import bootstrap_environment
 
     source, work, cache = (tmp_path / name for name in ("source", "work", "cache"))
     env = bootstrap_environment(source, work, cache, {"CARGO_TARGET_DIR": str(cache / "python/runtime/x")})
@@ -101,7 +101,7 @@ def test_rust_sdists_build_outside_the_nested_uv_cache(tmp_path):
 def test_windows_uv_cache_is_a_short_junction_into_the_transported_cache(tmp_path):
     # uv nests sdist builds ~200 characters below its root; under the deep transported
     # cache, setuptools/maturin link outputs passed MAX_PATH (LNK1104) on win32-x64/arm64.
-    from scripts.bundles.desktop_toolchain import short_alias
+    from scripts.build.toolchain import short_alias
 
     first, second = tmp_path / "desktop-inputs/python/runtime/a", tmp_path / "desktop-inputs/python/runtime/b"
     first.mkdir(parents=True)
@@ -119,7 +119,7 @@ def test_windows_uv_cache_is_a_short_junction_into_the_transported_cache(tmp_pat
 @pytest.mark.parametrize("exit_code", [0, 7])
 @pytest.mark.platforms("linux", "macos", "windows")
 def test_run_preparation_bootstraps_before_worker_in_isolated_child(tmp_path, monkeypatch, exit_code):
-    from scripts.bundles import desktop_toolchain
+    from scripts.build import toolchain as desktop_toolchain
 
     source, work, cache = (tmp_path / name for name in ("source space", "work", "cache"))
     (source / "pm").mkdir(parents=True)
@@ -137,7 +137,7 @@ def test_run_preparation_bootstraps_before_worker_in_isolated_child(tmp_path, mo
         "    return [sys.executable, '-I', '-B', str(script), *args]\n",
         encoding="utf-8",
     )
-    worker = source / "scripts/bundles/desktop_prepare.py"
+    worker = source / "scripts/build/native_build.py"
     worker.parent.mkdir(parents=True)
     worker.write_text(
         "import json, os, sys\n"
@@ -162,7 +162,7 @@ def test_run_preparation_bootstraps_before_worker_in_isolated_child(tmp_path, mo
 
 
 def test_bootstrap_real_pm_resolves_only_build_owned_state(tmp_path):
-    from scripts.bundles.desktop_toolchain import bootstrap_environment
+    from scripts.build.toolchain import bootstrap_environment
 
     source = Path(__file__).resolve().parents[2]
     work, cache = tmp_path / "work", tmp_path / "cache"
@@ -181,29 +181,12 @@ def test_bootstrap_real_pm_resolves_only_build_owned_state(tmp_path):
     assert all(path.is_relative_to(work) for path in (partials, uv_default, state))
 
 
-@pytest.mark.parametrize("target", ["darwin-arm64", "darwin-x64", "linux-x64", "win32-arm64"])
-def test_packaging_preserves_keychain_home_without_retargeting_build_state(tmp_path, target):
-    from scripts.bundles.desktop_inputs import packaging_environment
-    from scripts.bundles.desktop_toolchain import bootstrap_environment
-
-    source, work, cache = (tmp_path / name for name in ("source", "work", "cache"))
-    login_home = str(tmp_path / "login")
-    inherited = {"HOME": login_home, "CSC_KEYCHAIN": "explicit.keychain"}
-    isolated = bootstrap_environment(source, work, cache, inherited)
-    before = isolated.copy()
-    for caller in (inherited, {**inherited, "HOME": str(work / "launcher-home"),
-                               "HERMES_REAL_HOME": login_home}, {}):
-        packaged = packaging_environment(isolated, caller, target)
-        expected_home = (caller.get("HERMES_REAL_HOME") or caller.get("HOME") or str(Path.home())
-                         if target.startswith("darwin-") else isolated["HOME"])
-        assert packaged == {**isolated, "HOME": expected_home}
-    assert isolated == before
 
 
 @pytest.mark.platforms("linux", "macos", "windows")
 def test_prepare_tools_uses_pm_native_pins_and_separate_cache(tmp_path, monkeypatch):
     import pm
-    from scripts.bundles import desktop_toolchain
+    from scripts.build import toolchain as desktop_toolchain
     from pm import native_build
 
     source, work, cache = (tmp_path / name for name in ("source", "work", "cache"))
@@ -251,7 +234,7 @@ def test_prepare_tools_uses_pm_native_pins_and_separate_cache(tmp_path, monkeypa
 
 @pytest.mark.platforms("linux", "macos", "windows")
 def test_native_cache_identity_tracks_compilers_sdk_and_openssl(tmp_path, monkeypatch):
-    from scripts.bundles import desktop_toolchain
+    from scripts.build import toolchain as desktop_toolchain
 
     openssl = tmp_path / "openssl"
     (openssl / "include/openssl").mkdir(parents=True)
@@ -300,7 +283,7 @@ def test_native_cache_identity_tracks_compilers_sdk_and_openssl(tmp_path, monkey
 @pytest.mark.parametrize("complete", [False, True])
 def test_native_cache_leaves_room_for_sdist_compiler_outputs(tmp_path, monkeypatch, complete):
     from pathlib import PureWindowsPath
-    from scripts.bundles import desktop_toolchain
+    from scripts.build import toolchain as desktop_toolchain
 
     # Replay the Windows CI layout as path data, without faking the host OS.
     # uv builds in its cached sdist; /Fo is relative to that working directory.
@@ -335,7 +318,7 @@ def test_native_cache_leaves_room_for_sdist_compiler_outputs(tmp_path, monkeypat
 def test_native_cache_is_stable_without_a_developer_environment(tmp_path, monkeypatch):
     """win32-x64 never runs VsDevCmd, so VCToolsVersion is unset there. Its built
     wheels must still land in one partition per toolchain, not a fresh one per run."""
-    from scripts.bundles import desktop_toolchain
+    from scripts.build import toolchain as desktop_toolchain
 
     install = tmp_path / "vs"
     version_file = install / "VC/Auxiliary/Build/Microsoft.VCToolsVersion.default.txt"
