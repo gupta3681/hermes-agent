@@ -60,7 +60,6 @@ def recover_left_core_at_gateway_start() -> None:
         recover_left_core_in(root)
 
 
-
 def _own_policy_envs(platform) -> Optional[tuple]:
     """``(dm_policy_env, group_policy_env, allow_all_env)`` for a platform that declares
     ``own_policy_env``, else None. The live entry wins; a bundled platform whose entry is absent
@@ -1688,7 +1687,6 @@ class GatewayStartupMixin:
         if await self._abort_startup_if_shutdown_requested():
             return True
         self.delivery_router.adapters = self.adapters
-        self._wire_teams_pipeline_runtime()
         self._running = True
         self._install_plugin_message_injector()
         # A boot that could not start every configured platform is not a normal run: stamp ``degraded``

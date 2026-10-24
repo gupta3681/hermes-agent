@@ -9,13 +9,13 @@ async def _discord_owner(tmp_path, monkeypatch):
     from gateway.config import GatewayConfig, Platform, PlatformConfig
     from gateway.run import GatewayRunner
     from gateway.session_authority import initialize_session_authority, SessionAuthority
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     return runner, adapter, authority, adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
@@ -41,7 +41,7 @@ async def test_completion_after_compression_admits_to_the_logical_root(tmp_path,
     db = authority.db
     db.append_message(root, 'user', 'human')
     child = root + '-child'
-    db.publish_compression_child(parent_session_id=root, child_session_id=child, source='discord',
+    db.publish_compression_child(parent_session_id=root, child_session_id=child, source='whatsapp',
                                  messages=[{'role': 'user', 'content': 'summary'}], require_compression_lease=False)
     assert runner.session_store.advance_compression_session(key, root, child) is not None
     event = dict(pending(key, 'after-compression'), parent_session_id=child)

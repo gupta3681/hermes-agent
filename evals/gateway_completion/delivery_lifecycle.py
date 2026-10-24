@@ -10,7 +10,7 @@ HOME.mkdir(parents=True, exist_ok=True)
 )
 from gateway.run import GatewayRunner
 from gateway.config import GatewayConfig, Platform, PlatformConfig
-from plugins.platforms.discord.adapter import DiscordAdapter
+from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 from gateway.platforms.base import SendResult
 from gateway.session_context import set_session_vars, clear_session_vars
 from tools.terminal_tool_background import spawn_background_process
@@ -22,8 +22,8 @@ print("SOURCE", rn.__file__, "HOME", HOME)
 
 async def main():
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig())
-    runner.adapters[Platform.DISCORD] = adapter
+    adapter = WhatsAppAdapter(PlatformConfig())
+    runner.adapters[Platform.WHATSAPP] = adapter
     turns = []
     sends = []
 
@@ -48,11 +48,11 @@ async def main():
     adapter.set_message_handler(runner._handle_message)
     runner._running = True
     idle = asyncio.create_task(runner._async_delegation_watcher(interval=0.05))
-    key = "agent:main:discord:dm:123"
+    key = "agent:main:whatsapp:dm:123"
 
     def spawn(label, notify=False, patterns=None):
         tokens = set_session_vars(
-            platform="discord",
+            platform="whatsapp",
             chat_id="123",
             chat_type="dm",
             session_key=key,
@@ -124,7 +124,7 @@ async def main():
         "session_id": result["session_id"],
         "check_interval": 0.05,
         "session_key": key,
-        "platform": "discord",
+        "platform": "whatsapp",
         "chat_id": "123",
         "notify_on_complete": False,
     })
@@ -196,7 +196,7 @@ async def main():
         and not pr.completion_queue.empty()
     )
     # Two real adapters: private completion must never enter the primary bot.
-    secondary = DiscordAdapter(PlatformConfig())
+    secondary = WhatsAppAdapter(PlatformConfig())
     secondary_turns = []
 
     async def secondary_boundary(event):
@@ -204,9 +204,9 @@ async def main():
 
     secondary.set_message_handler(secondary_boundary)
     secondary.send_typing = typing_boundary
-    runner._profile_adapters = {"research": {Platform.DISCORD: secondary}}
+    runner._profile_adapters = {"research": {Platform.WHATSAPP: secondary}}
     turns.clear()
-    evt = {"session_key": "agent:research:discord:dm:123", "type": "completion"}
+    evt = {"session_key": "agent:research:whatsapp:dm:123", "type": "completion"}
     assert await runner._inject_watch_notification("private completion", evt) is True
     for task in list(secondary._background_tasks):
         await task

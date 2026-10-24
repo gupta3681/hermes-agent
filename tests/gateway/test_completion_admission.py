@@ -10,7 +10,7 @@ from gateway.platforms.event import MessageEvent
 from gateway.run import GatewayRunner
 from gateway.session import SessionSource, build_session_key
 from hermes_state import SessionDB
-from plugins.platforms.discord.adapter import DiscordAdapter
+from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 from tools import async_delegation as delegation
 
 
@@ -34,9 +34,9 @@ async def drain(adapter):
 @pytest.mark.asyncio
 async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_path):
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
-    source = SessionSource(platform=Platform.DISCORD, chat_type="dm", chat_id="42", user_id="42")
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
+    source = SessionSource(platform=Platform.WHATSAPP, chat_type="dm", chat_id="42", user_id="42")
     key = build_session_key(source)
     events = [pending(key, f"admission-{i}") for i in range(2)]
     received = []
@@ -73,8 +73,8 @@ async def test_completion_ack_requires_admission_and_replay_never_repeats(tmp_pa
             row = delegation.get_durable_delegation(event["delegation_id"])
             assert (row["delivery_state"], row["delivery_attempts"]) == ("pending", 0)
         # An explicitly mismatched adapter key must fail closed too.
-        wrong = dict(events[0], session_key="agent:main:discord:dm:other",
-                     platform="discord", chat_type="dm", chat_id="42")
+        wrong = dict(events[0], session_key="agent:main:whatsapp:dm:other",
+                     platform="whatsapp", chat_type="dm", chat_id="42")
         assert await runner._inject_watch_notification("wrong-route", wrong) is False
         runner._BUSY_QUEUE_MAX_PENDING = 4
         assert await runner._deliver_async_delegation_group(events) is True

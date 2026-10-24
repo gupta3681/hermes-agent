@@ -79,7 +79,7 @@ def resolve_hermes_bin() -> Optional[str]:
             return _is_python_script(p)
         # A console script pinned to the running venv (``#!<venv>/bin/python``) keeps the venv and
         # stays exec-able; a shebang that resolves elsewhere (``env python3``) loses it.
-        from hermes_cli.linux_desktop_entry import _needs_interpreter
+        from hermes_cli.relaunch_scripts import _needs_interpreter
 
         return _needs_interpreter(pathlib.Path(p))
 

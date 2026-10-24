@@ -18,6 +18,8 @@ fact = Facts(store / 'facts.json').get('python')
 expected = get_package('python').binary(store / fact['entry'], current_target())
 assert Path(sys._base_executable).resolve() == expected.resolve()
 import hermes_yaml as yaml
+import hermes_cli.gateway
+import gateway.run
 print('PM interpreter and application dependencies load as hermes')
 """
     result = subprocess.run(
@@ -33,7 +35,10 @@ def test_headless_image_keeps_runtime_compiler_without_frontend_products(built_i
     probe = """
 from pathlib import Path
 from importlib.util import find_spec
-assert find_spec('telegram') is None
+for module in ('telegram', 'discord', 'slack_bolt', 'slack_sdk', 'mautrix', 'dingtalk_stream', 'microsoft_teams'):
+    assert find_spec(module) is None, module
+assert find_spec('aiohttp') is not None
+assert find_spec('qrcode') is not None
 assert not Path('/opt/hermes/hermes_cli/web_dist/index.html').exists()
 assert not Path('/opt/hermes/ui-tui/dist/entry.js').exists()
 assert not Path('/opt/hermes/apps/desktop/package.json').exists()

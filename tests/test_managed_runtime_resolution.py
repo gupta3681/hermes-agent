@@ -88,12 +88,6 @@ _ALLOWED: dict[tuple[str, str], str] = {
         "PM-composed build context: `which(node)` runs against the PATH pm's "
         "ensure('npm')/env_for('node') just composed, not the ambient one."
     ),
-    ("hermes_cli/source_build.py", "npm"): (
-        "Same PM-composed build context as the node lookup above."
-    ),
-    ("hermes_cli/main_desktop.py", "npm"): (
-        "Desktop build resolves npm inside the PM-prepared build_env PATH."
-    ),
     ("pm/workspace.py", "npm"): (
         "Plugin workspace installs resolve npm inside the PM runner env that "
         "pm.ensure('npm') just composed."
@@ -101,10 +95,6 @@ _ALLOWED: dict[tuple[str, str], str] = {
     ("tools/mcp_tool_config.py", "node"): (
         "Looks up node only inside the sealed payload's own node dirs (an explicit "
         "`path=`, never the ambient PATH), to run a package bin on the packaged node."
-    ),
-    ("apps/desktop/electron/fixtures/source-backend.py", "uv"): (
-        "Test fixture drives the real uv deliberately placed on the test "
-        "runner's PATH; it is not Hermes-owned subprocess resolution."
     ),
 }
 

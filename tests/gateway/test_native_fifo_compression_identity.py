@@ -13,13 +13,13 @@ async def test_native_fifo_identity_is_stable_across_compression(tmp_path, monke
     from gateway.session_ingress_context import native_callback
     from hermes_constants import get_hermes_home
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
@@ -37,7 +37,7 @@ async def test_native_fifo_identity_is_stable_across_compression(tmp_path, monke
     db.append_message(parent, 'user', 'first')
     db.append_message(parent, 'assistant', 'ok')
     child = parent + '-child'
-    db.publish_compression_child(parent_session_id=parent, child_session_id=child, source='discord',
+    db.publish_compression_child(parent_session_id=parent, child_session_id=child, source='whatsapp',
                                  messages=[{'role': 'user', 'content': 'summary'}],
                                  require_compression_lease=False)
     assert runner.session_store.advance_compression_session(key, parent, child) is not None

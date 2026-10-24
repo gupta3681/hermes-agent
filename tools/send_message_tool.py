@@ -17,18 +17,8 @@ from tools.send_message_targets import (
 from tools.send_message_senders import (
     _AUDIO_EXTS, _DEFAULT_CAPTION_LIMIT, _IMAGE_EXTS, _NO_DELIVERABLE, _VIDEO_EXTS, _VOICE_EXTS,
     _adapter_media_method, _error, _live_adapter, _media_caption_split, _plugin_standalone_sender,
-    _registry_standalone_send, _resolve_slack_user_target, _sanitize_error_text,
-    _send_matrix_via_adapter)
+    _registry_standalone_send, _sanitize_error_text)
 from tools.registry import tool_error
-
-# A bare Slack user id (session metadata / home-channel config) is opened as a DM; same shape the
-# slack plugin's target parser turns into ``user:U...``.
-_SLACK_USER_ID_RE = re.compile(r"^\s*(U[A-Z0-9]{8,})\s*$")
-
-# NOTE: ``send_message`` is intentionally NOT registered as an agent-callable model tool
-# (the agent must not fire cross-platform messages on its own); cron delivery, the
-# ``hermes send`` CLI, the kanban notifier and the opt-in MCP server import the helpers.
-
 
 def prepare_send_message_platforms() -> None:
     """Load enabled standalone plugins before tool schemas/cache keys are built."""
@@ -246,23 +236,6 @@ def _handle_send(args):
             return tool_error(err)
     if duplicate_skip := _maybe_skip_cron_duplicate_send(platform_name, chat_id, thread_id):
         return json.dumps(duplicate_skip)
-    # Slack: resolve user targets to DM channel IDs before sending. _parse_target_ref emits internal
-    # ``user:U...`` / ``user_name:@handle`` targets; a bare U... id can also arrive from session metadata or
-    # the home-channel config. All are opened via conversations.open (fixes #19236).
-    if platform_name == "slack" and chat_id:
-        chat_id, resolve_err = _slack_dm_chat_id(pconfig, chat_id)
-        if resolve_err:
-            return json.dumps(resolve_err)
-    # POSITION IS LOAD-BEARING — this must stay BELOW Slack user→DM resolution.
-    # `_parse_target_ref` emits internal pseudo-ids (`user_name:ben`,
-    # `user:U...`) that no provenance can ever contain, because provenances
-    # record RESOLVED conversation ids. Authorizing above the resolver compared
-    # a handle against a set of `D...` ids and refused every Slack DM — a fix
-    # that caused the outage it was meant to prevent. Pinned by
-    # test_slack_user_targets_resolve_then_authorize; moving this call back up
-    # turns those cases red.
-    # thread_id is part of the DESTINATION: on Discord the thread is the literal
-    # REST target, so an attested parent must not vouch for an arbitrary thread.
     _relay_denial = _authorize_relay_target(platform_name, chat_id, thread_id,
                                             native_token=getattr(pconfig, "token", None))
     if _relay_denial:
@@ -323,7 +296,7 @@ def _resolve_platform_config(platform_name, config):
         return None, None, None, err
     pconfig = config.platforms.get(platform)
     if not pconfig or not pconfig.enabled:
-        pconfig = _weixin_env_pconfig() if platform_name == "weixin" else None
+        pconfig = None
     if pconfig is None:
         return None, None, None, _not_configured_error(platform_name, platform, entry)
     return platform, pconfig, entry, None
@@ -402,25 +375,10 @@ def _home_chat_id(config, platform, platform_name):
     home = config.get_home_channel(platform)
     if home:
         return home.chat_id, None
-    # Home channel is a per-profile target like the token beside it: a raw environ read would post a
-    # multiplexed secondary's message into the default profile's Weixin chat.
-    wx_home = (get_secret("WEIXIN_HOME_CHANNEL", "") or "").strip() if platform_name == "weixin" else ""
-    if wx_home:
-        return wx_home, None
     home_env = _HOME_CHANNEL_ENV_OVERRIDES.get(platform_name, f"{platform_name.upper()}_HOME_CHANNEL")
     return None, (f"No home channel set for {platform_name} to determine where to send the message. "
                   f"Either specify a channel directly with '{platform_name}:CHANNEL_NAME', "
                   f"or set a home channel via: hermes config set {home_env} <channel_id>")
-
-
-def _slack_dm_chat_id(pconfig, chat_id):
-    """Open Slack user targets (``user:``/``user_name:`` from the parser, or a bare U... id from
-    session metadata / home-channel config) as DM conversations. ``(chat_id, None)`` or ``(None, error_dict)``."""
-    dm_target = f"user:{chat_id}" if chat_id.startswith("U") and _SLACK_USER_ID_RE.fullmatch(chat_id) else chat_id
-    if not dm_target.startswith(("user:", "user_name:")):
-        return chat_id, None
-    from model_tools import _run_async
-    return _run_async(_resolve_slack_user_target(pconfig.token, dm_target))
 
 
 def _mirror_sent_message(platform_name, chat_id, mirror_text, thread_id):
@@ -434,18 +392,6 @@ def _mirror_sent_message(platform_name, chat_id, mirror_text, thread_id):
             user_id=get_session_env("HERMES_SESSION_USER_ID", "") or None))
     except Exception:
         return False
-
-
-def _weixin_env_pconfig():
-    """Synthesize a Weixin PlatformConfig from .env secrets, or None."""
-    wx_token = get_secret("WEIXIN_TOKEN", "").strip()
-    wx_account = get_secret("WEIXIN_ACCOUNT_ID", "").strip()
-    if not (wx_token and wx_account):
-        return None
-    from gateway.config import PlatformConfig
-    return PlatformConfig(enabled=True, token=wx_token, extra={
-        "account_id": wx_account, "base_url": get_secret("WEIXIN_BASE_URL", "").strip(),
-        "cdn_base_url": get_secret("WEIXIN_CDN_BASE_URL", "").strip()})
 
 
 def _describe_media_for_mirror(media_files):
@@ -656,22 +602,7 @@ async def _send_plugin_standalone(platform_name, pconfig, chat_id, message, chun
     return await _send_chunks(chunks, send_one)
 
 
-def _via_adapter_route(p, pc, cid, chunk, media, tid, fd):
-    return _send_via_adapter(p, pc, cid, chunk, thread_id=tid, media_files=media, force_document=fd)
-
-
-# Native-media chunked routes for built-in platforms; media rides on the final chunk, non-final
-# chunks get the sentinel. platform -> (media required, sentinel, sender(platform, pconfig,
-# chat_id, chunk, media, thread_id, force_document)). Matrix: ALL sends use the native adapter
-# (E2EE text). WeCom: media needs the running gateway. Slack text: live adapter (multi-workspace, ignored_channels gates) else the
-# plugin's standalone sender. Names resolve at call time so tests can monkeypatch the senders.
-_CHUNKED_ROUTES = {
-    "matrix": (False, [], lambda p, pc, cid, chunk, media, tid, fd: _send_matrix_via_adapter(
-        pc, cid, chunk, media_files=media, thread_id=tid)),
-    "slack": (False, [], _via_adapter_route),
-    "wecom": (True, None, _via_adapter_route)}
-
-_MEDIA_PLATFORMS_NOTE = "discord, matrix, weixin, signal, yuanbao, feishu, whatsapp, slack and qqbot"
+_MEDIA_PLATFORMS_NOTE = "whatsapp and whatsapp_cloud"
 
 
 async def _send_to_platform(platform, pconfig, chat_id, message, thread_id=None, media_files=None,
@@ -682,9 +613,6 @@ async def _send_to_platform(platform, pconfig, chat_id, message, thread_id=None,
     from gateway.config import Platform
     platform_name = platform.value if hasattr(platform, "value") else str(platform)
     media_files = media_files or []
-    if platform_name == "weixin":  # plugin standalone sender only: no other plugin's import can block it
-        return await _send_plugin_standalone(platform_name, pconfig, chat_id, message, [message], media_files,
-                                             thread_id=thread_id, max_len=None, force_document=force_document)
     from gateway.platforms.base import BasePlatformAdapter
     max_len = _platform_max_length(platform)
     chunks = BasePlatformAdapter.truncate_message(message, max_len) if max_len else [message]
@@ -693,15 +621,8 @@ async def _send_to_platform(platform, pconfig, chat_id, message, thread_id=None,
         return await _send_plugin_standalone(platform_name, pconfig, chat_id, message, chunks, media_files,
                                              thread_id=thread_id, max_len=max_len, force_document=force_document,
                                              mentions=mentions)
-    route = _CHUNKED_ROUTES.get(platform_name)
-    if route is not None and (media_files or not route[0]):
-        _, empty_media, sender = route
-        return await _send_chunks(chunks, lambda chunk, is_last: sender(
-            platform, pconfig, chat_id, chunk, media_files if is_last else empty_media, thread_id, force_document))
-
-    # Generic path: text only. Buzz delivers media natively via _send_via_adapter, so no warning.
     warning = None
-    if media_files and platform_name != "buzz":
+    if media_files:
         if not message.strip():
             return {"error": (f"send_message MEDIA delivery is currently only supported for {_MEDIA_PLATFORMS_NOTE}; "
                               f"target {platform_name} had only media attachments")}
@@ -722,8 +643,9 @@ async def _send_to_platform(platform, pconfig, chat_id, message, thread_id=None,
             except Exception as e:
                 return {"error": f"Plugin send_message handler failed: {e}"}
         # Plugin platform: live gateway adapter if available, else standalone_sender_fn.
-        send_one = lambda chunk, is_last: _via_adapter_route(
-            platform, pconfig, chat_id, chunk, media_files if is_last else [], thread_id, force_document)
+        send_one = lambda chunk, is_last: _send_via_adapter(
+            platform, pconfig, chat_id, chunk, media_files=media_files if is_last else [],
+            thread_id=thread_id, force_document=force_document)
     last_result = await _send_chunks(chunks, send_one)
     if (warning and isinstance(last_result, dict) and last_result.get("success")
             and not last_result.get("media_delivered")):

@@ -64,10 +64,10 @@ async def _busy_owner(monkeypatch, adapter, source, **wiring):
     return SimpleNamespace(runner=runner, authority=authority, key=key, settle=settle)
 
 
-def _signal(monkeypatch):
-    from plugins.platforms.signal.adapter import SignalAdapter
-    monkeypatch.setenv('SIGNAL_ALLOWED_USERS', '+15550001')
-    adapter = SignalAdapter(PlatformConfig(enabled=True, extra={'account': '+15559999'}))
+def _whatsapp(monkeypatch):
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '+15550001')
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, extra={'account': '+15559999'}))
     return adapter, adapter.build_source(chat_id='+15550001', chat_type='dm', user_id='+15550001')
 
 
@@ -92,8 +92,8 @@ def _hold_capture(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_signal_busy_photos_merge_without_holding_the_reader(monkeypatch, tmp_path):
-    adapter, source = _signal(monkeypatch)
+async def test_whatsapp_busy_photos_merge_without_holding_the_reader(monkeypatch, tmp_path):
+    adapter, source = _whatsapp(monkeypatch)
     owner = await _busy_owner(monkeypatch, adapter, source)
     for n in (1, 2):  # as _sse_listener does: the next envelope only after handle_message returned
         await adapter.handle_message(_photo(source, tmp_path, n))
@@ -101,13 +101,11 @@ async def test_signal_busy_photos_merge_without_holding_the_reader(monkeypatch, 
     assert await owner.settle(2) == [('', 2)]
 
 
-
-
 @pytest.mark.asyncio
 async def test_restart_after_a_held_text_waits_for_its_commit(monkeypatch):
     """A text, then an authorized /restart inside the burst window: the text is queued before
     admission closes, so the next owner runs it."""
-    adapter, source = _signal(monkeypatch)
+    adapter, source = _whatsapp(monkeypatch)
     owner = await _busy_owner(monkeypatch, adapter, source, busy_text_mode='queue')
     monkeypatch.setattr(owner.runner, 'request_restart', lambda **kw: setattr(owner.runner, '_draining', True))
     await adapter.handle_message(MessageEvent(text='B', source=source, message_id='B'))
@@ -122,7 +120,7 @@ async def test_restart_after_a_held_text_waits_for_its_commit(monkeypatch):
 async def test_new_waits_for_a_burst_still_committing(monkeypatch, tmp_path):
     """A photo still capturing when /new arrives commits first, so /new cancels it with the old
     conversation instead of it running in the new one."""
-    adapter, source = _signal(monkeypatch)
+    adapter, source = _whatsapp(monkeypatch)
     entered, release = _hold_capture(monkeypatch)
     owner = await _busy_owner(monkeypatch, adapter, source)
     try:
@@ -140,7 +138,7 @@ async def test_new_waits_for_a_burst_still_committing(monkeypatch, tmp_path):
 async def test_next_burst_waits_while_the_chats_last_one_commits(monkeypatch, tmp_path):
     """The chat's first burst is still committing: the reader waits before holding another one,
     as main's reader waited at the first commit, so uncommitted input stays bounded."""
-    adapter, source = _signal(monkeypatch)
+    adapter, source = _whatsapp(monkeypatch)
     entered, release = _hold_capture(monkeypatch)
     owner = await _busy_owner(monkeypatch, adapter, source)
     try:
@@ -161,7 +159,7 @@ async def test_restart_waits_for_a_held_text_queued_behind_a_slow_capture(monkey
     route reservation, which lets the serial reader go on), then an authorized /restart. The command
     barrier must wait until B is durably committed, not only until its FIFO position is fixed: admission
     closes after it, and an input with no row then is lost for good."""
-    adapter, source = _signal(monkeypatch)
+    adapter, source = _whatsapp(monkeypatch)
     entered, release = _hold_capture(monkeypatch)
     runner = GatewayRunner(GatewayConfig())
 
@@ -219,7 +217,7 @@ async def test_restart_waits_for_a_direct_busy_input_queued_behind_a_slow_captur
     from gateway import session_ingress_burst
     from gateway.session_authority import SessionAuthority
     from gateway.session_runtime_workers import mutation_tasks
-    adapter, source = _signal(monkeypatch)
+    adapter, source = _whatsapp(monkeypatch)
     entered, release = _hold_capture(monkeypatch)
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)  # no drain: rows stay queued
     runner = GatewayRunner(GatewayConfig())
@@ -262,84 +260,3 @@ async def test_restart_waits_for_a_direct_busy_input_queued_behind_a_slow_captur
         await adapter.cancel_background_tasks()
         await async_wait_until(lambda: not mutation_tasks(authority), timeout=10)
         runner.session_store.close_all_db_handles()
-
-
-@pytest.mark.asyncio
-async def test_buzz_split_text_merges_through_the_reader(monkeypatch):
-    """Buzz was left out of the #140973 serial-reader sweep: both the WS listener and the poll
-    sweep await ``_handle_events`` before reading the next batch (#141378)."""
-    adapter, state, source = _buzz(monkeypatch)
-    owner = await _busy_owner(monkeypatch, adapter, source, busy_text_mode='queue')
-    # as both readers do: the next batch only after the previous _handle_events returned
-    await adapter._handle_events('chan', state, [_buzz_event(1, 'first half')])
-    await adapter._handle_events('chan', state, [_buzz_event(2, 'second half')])
-    assert await owner.settle(2) == [('first half\nsecond half', 0)]
-
-
-def _buzz(monkeypatch):
-    from collections import OrderedDict
-
-    from plugins.platforms.buzz.adapter import BuzzAdapter
-
-    monkeypatch.setenv('BUZZ_ALLOWED_USERS', 'aa11bb22')
-    adapter = BuzzAdapter(PlatformConfig(enabled=True))
-    async def _name(pubkey):
-        return pubkey[:8]
-    adapter._resolve_user_name = _name  # the CLI-backed resolver has no place in a unit test
-    state = {"chat_type": "dm", "last_ts": 0, "seen": OrderedDict(), "event_meta": OrderedDict()}
-    adapter._channel_state['chan'] = state
-    return adapter, state, adapter.build_source(chat_id='chan', chat_type='dm', user_id='aa11bb22')
-
-
-def _buzz_event(i, text):
-    return {'id': f'e{i}', 'kind': 9, 'pubkey': 'aa11bb22', 'content': text, 'created_at': i}
-
-
-@pytest.mark.asyncio
-async def test_buzz_cursor_never_passes_an_uncommitted_input(monkeypatch):
-    """Buzz saves its receive cursor after ``_handle_events`` returns, deferred while a busy burst is
-    held. The reader marks the next event seen before dispatching it, so a write that lands in that gap
-    must still name only committed inputs: a restart restores the saved cursor and skips the rest."""
-    adapter, state, source = _buzz(monkeypatch)
-    owner = await _busy_owner(monkeypatch, adapter, source, busy_text_mode='queue')
-    saved = []
-    monkeypatch.setattr(type(adapter), '_write_cursors', staticmethod(lambda path, payload: saved.append(
-        (payload['channels']['chan']['last_ts'], {row['request_id'] for row in _rows(owner.authority)}))))
-    await adapter._handle_events('chan', state, [_buzz_event(1, 'held')])
-    assert owner.key in adapter._shared_bursts and saved == []  # returned with the input only held
-    gate, real_name = asyncio.Event(), adapter._resolve_user_name
-
-    async def slow_name(pubkey):  # e2 is marked seen, not yet dispatched, while the burst commits
-        await gate.wait()
-        return await real_name(pubkey)
-    adapter._resolve_user_name = slow_name
-    second = asyncio.create_task(adapter._handle_events('chan', state, [_buzz_event(2, 'next')]))
-    await async_wait_until(lambda: saved, timeout=15, what='the deferred cursor write')
-    gate.set()
-    await asyncio.wait_for(second, 10)
-    assert await owner.settle(3) == [('held', 0), ('next', 0)]
-    assert saved[0][0] == 1, saved
-    # Every saved cursor names only events that had an admission row when it was written.
-    assert all(f'e{n}' in rows for last_ts, rows in saved for n in range(1, last_ts + 1)), saved
-
-
-@pytest.mark.asyncio
-async def test_buzz_cursor_write_waiting_on_disk_skips_a_newer_held_burst(monkeypatch):
-    """e1's deferred write is due but waits behind a slow earlier write; meanwhile e2 arrives and is
-    held. The waiting write must still land the cursor as it was when e1 committed, not e2's."""
-    adapter, state, source = _buzz(monkeypatch)
-    owner = await _busy_owner(monkeypatch, adapter, source, busy_text_mode='queue')
-    saved = []
-    monkeypatch.setattr(type(adapter), '_write_cursors', staticmethod(lambda path, payload: saved.append(
-        (payload['channels']['chan']['last_ts'], {row['request_id'] for row in _rows(owner.authority)}))))
-    await adapter._cursor_write_lock.acquire()  # the earlier write, still in its fsync
-    await adapter._handle_events('chan', state, [_buzz_event(1, 'held')])
-    await async_wait_until(lambda: adapter._cursor_write_lock._waiters, timeout=15,
-                           what="e1's committed write to queue on the lock")
-    await adapter._handle_events('chan', state, [_buzz_event(2, 'next')])
-    assert owner.key in adapter._shared_bursts  # e2 is held, not committed
-    adapter._cursor_write_lock.release()
-    await async_wait_until(lambda: saved, timeout=15, what='the waiting cursor write')
-    assert saved[0][0] == 1, saved
-    assert await owner.settle(3) == [('held', 0), ('next', 0)]
-    assert all(f'e{n}' in rows for last_ts, rows in saved for n in range(1, last_ts + 1)), saved

@@ -1,6 +1,6 @@
 """A user message admitted while a classic fallback wake holds the route's slot waits queued and runs
 as its own admitted turn; it is never handed to the wake's busy path and booked completed unrun (N82).
-Real GatewayRunner, DiscordAdapter, SessionAuthority and drain over SQLite; the turn is a stand-in."""
+Real GatewayRunner, WhatsAppAdapter, SessionAuthority and drain over SQLite; the turn is a stand-in."""
 import asyncio
 
 import pytest
@@ -20,17 +20,17 @@ async def test_message_during_classic_wake_runs_after_it_not_inside_it(monkeypat
     from gateway.session_results import execution_result
     from gateway.wake import deliver_wake
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
 
     async def send(chat_id, content, reply_to=None, metadata=None):
         return SendResult(success=True, message_id='sent')
     monkeypatch.setattr(adapter, 'send', send)
     adapter.gateway_runner = runner
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')

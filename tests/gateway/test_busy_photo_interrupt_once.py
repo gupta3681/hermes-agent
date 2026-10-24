@@ -24,12 +24,12 @@ async def _followup_while_running(monkeypatch, event, marker, *, fail_admit=Fals
     admit is visible to the drain. ``fail_admit`` makes that admit refuse (``admission_conflict``).
     """
     from gateway.session_authority import initialize_session_authority
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp_cloud.adapter import WhatsAppCloudAdapter
     from tests.waiting import async_wait_until
 
-    monkeypatch.setenv("DISCORD_ALLOWED_USERS", "42")
+    monkeypatch.setenv("WHATSAPP_CLOUD_ALLOWED_USERS", "42")
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
+    adapter = WhatsAppCloudAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
 
     sent = []
 
@@ -44,7 +44,7 @@ async def _followup_while_running(monkeypatch, event, marker, *, fail_admit=Fals
 
     monkeypatch.setattr(GatewayRunner, "_transcribe_and_echo_pending_voice", transcribed)
     adapter.gateway_runner = runner
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP_CLOUD: adapter}
     await initialize_session_authority(runner, profile_id="default", instance_id="owner")
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id="42", chat_type="dm", user_id="42")

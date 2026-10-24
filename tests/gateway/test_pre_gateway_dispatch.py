@@ -168,17 +168,17 @@ async def test_rewritten_message_keeps_its_callback_provenance_and_is_admitted(m
     from gateway.session_ingress_context import capture_provenance, native_callback, register_transport_home
     from hermes_constants import get_hermes_home
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     async def rewrite(name, **_kwargs):
         return [{"action": "rewrite", "text": "rewritten"}] if name == "pre_gateway_dispatch" else []
 
     monkeypatch.setattr("hermes_cli.lifecycle.ainvoke_hook", rewrite)
     monkeypatch.setattr(SessionAuthority, "_schedule", lambda self, ref: None)
-    monkeypatch.setenv("DISCORD_ALLOWED_USERS", "42")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "42")
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id="default", instance_id="owner")
     runner._wire_adapter_handlers(adapter)
     # The multiplexed admission check that refused the reporter (thanks @unsupportedpastels).

@@ -1,7 +1,7 @@
 """A slash command that becomes a turn (``/queue``, ``/steer``, ``/plan``, a skill) joins the chat's
 durable FIFO like text, so it runs after the turns already admitted, never inside the running one.
 
-Real GatewayRunner, DiscordAdapter, SessionAuthority and drain over SQLite. The turn body
+Real GatewayRunner, WhatsAppAdapter, SessionAuthority and drain over SQLite. The turn body
 (``_handle_message_with_agent``) is a stand-in; the running turn calls the real post-run drain
 step ``_run_agent_drain_pending``, so anything left in the in-process slot shows up "inside A".
 """
@@ -17,13 +17,13 @@ def _owner(monkeypatch, mode=None):
     from gateway.config import GatewayConfig, Platform, PlatformConfig
     from gateway.platforms.base import SendResult
     from gateway.run import GatewayRunner
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
     if mode is not None:
         runner._busy_input_mode = mode
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
     sent = []
 
     async def send(chat_id, content, reply_to=None, metadata=None):
@@ -31,7 +31,7 @@ def _owner(monkeypatch, mode=None):
         return SendResult(success=True, message_id=f's{len(sent)}')
     monkeypatch.setattr(adapter, 'send', send)
     adapter.gateway_runner = runner
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     monkeypatch.setattr(runner, '_read_user_config', lambda: {'approvals': {'destructive_slash_confirm': False}})
     return runner, adapter, sent
 

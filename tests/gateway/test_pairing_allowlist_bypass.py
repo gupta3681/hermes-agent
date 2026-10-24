@@ -24,7 +24,7 @@ from gateway.session import Platform, SessionSource
 @pytest.fixture(autouse=True)
 def _isolate_env(monkeypatch):
     for var in (
-        "TELEGRAM_ALLOWED_USERS",
+        "WHATSAPP_ALLOWED_USERS",
         "TELEGRAM_ALLOW_ALL_USERS",
         "TELEGRAM_GROUP_ALLOWED_USERS",
         "TELEGRAM_GROUP_ALLOWED_CHATS",
@@ -52,7 +52,7 @@ def _make_runner(*, paired: bool):
 
 def _make_source(user_id: str = "pairme", chat_type: str = "dm"):
     return SessionSource(
-        platform=Platform.TELEGRAM,
+        platform=Platform.WHATSAPP,
         chat_id="123",
         chat_type=chat_type,
         user_id=user_id,
@@ -64,14 +64,14 @@ def _make_source(user_id: str = "pairme", chat_type: str = "dm"):
 def test_paired_user_authorized_even_when_not_in_allowlist(monkeypatch):
     """Union semantics: pairing is a grant, honored alongside the allowlist."""
     runner = _make_runner(paired=True)
-    monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "owner1,owner2")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "owner1,owner2")
 
     assert runner._is_user_authorized(_make_source("pairme")) is True
 
 
 def test_unpaired_user_in_allowlist_still_authorized(monkeypatch):
     runner = _make_runner(paired=False)
-    monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "owner1")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "owner1")
 
     assert runner._is_user_authorized(_make_source("owner1")) is True
 
@@ -100,7 +100,7 @@ def _approve_new_user(store, platform, user_id, user_name=""):
 
 def test_approval_adds_to_configured_allowlist(store, monkeypatch):
     """When an allowlist exists, approval appends the user to it (option i)."""
-    monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "owner1")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "owner1")
     # save_env_value writes to .env under HERMES_HOME; patch it to capture.
     captured = {}
     import hermes_cli.config as cfg
@@ -109,13 +109,13 @@ def test_approval_adds_to_configured_allowlist(store, monkeypatch):
                         lambda k, v: (captured.__setitem__(k, v),
                                       os.environ.__setitem__(k, v)))
 
-    _approve_new_user(store, "telegram", "newuser99")
+    _approve_new_user(store, "whatsapp", "newuser99")
 
-    assert captured.get("TELEGRAM_ALLOWED_USERS") == "owner1,newuser99"
+    assert captured.get("WHATSAPP_ALLOWED_USERS") == "owner1,newuser99"
 
 
 def test_revoke_removes_from_allowlist(store, monkeypatch):
-    monkeypatch.setenv("TELEGRAM_ALLOWED_USERS", "owner1,newuser99")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "owner1,newuser99")
     saved = {}
     removed = []
     import hermes_cli.config as cfg
@@ -125,10 +125,10 @@ def test_revoke_removes_from_allowlist(store, monkeypatch):
                                       os.environ.__setitem__(k, v)))
     monkeypatch.setattr(cfg, "remove_env_value", lambda k: removed.append(k))
     # Seed the approved list directly so revoke has something to remove.
-    store._approve_user("telegram", "newuser99", "")
+    store._approve_user("whatsapp", "newuser99", "")
 
-    assert store.revoke("telegram", "newuser99") is True
-    assert saved.get("TELEGRAM_ALLOWED_USERS") == "owner1"
+    assert store.revoke("whatsapp", "newuser99") is True
+    assert saved.get("WHATSAPP_ALLOWED_USERS") == "owner1"
 
 
 def test_revoke_whatsapp_device_jid_removes_bare_allowlist_entry(store, monkeypatch):
@@ -394,122 +394,3 @@ def test_whatsapp_live_allowlist_denies_when_env_key_removed(monkeypatch):
     assert adapter._live_dm_allow_from() == set()
     assert adapter._is_dm_intake_allowed("15551234567") is False
     assert adapter._is_dm_allowed("15551234567") is False
-
-
-@pytest.mark.asyncio
-async def test_matrix_pairing_revoke_denies_live_message_and_approval_without_restart(store):
-    """The runner's live pairing verdict must gate both Matrix messages and approvals."""
-    from unittest.mock import AsyncMock, patch
-
-    from gateway.config import GatewayConfig, PlatformConfig
-    from gateway.run import GatewayRunner
-    from plugins.platforms.matrix.adapter import MatrixAdapter, _MatrixApprovalPrompt
-
-    user_id = "@paired:example.org"
-    room_id = "!room:example.org"
-    config = PlatformConfig(
-        enabled=True,
-        extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
-    )
-    adapter = MatrixAdapter(config)
-    runner = object.__new__(GatewayRunner)
-    runner.config = GatewayConfig(platforms={Platform.MATRIX: config})
-    runner.adapters = {Platform.MATRIX: adapter}
-    runner._profile_adapters = {}
-    runner.pairing_store = store
-    runner.pairing_stores = {}
-    adapter.set_authorization_check(runner._make_adapter_auth_check(Platform.MATRIX))
-
-    source = SessionSource(
-        platform=Platform.MATRIX,
-        user_id=user_id,
-        chat_id=room_id,
-        user_name="Paired User",
-        chat_type="dm",
-    )
-    assert runner._is_user_authorized(source) is False
-
-    code = store.generate_code("matrix", user_id, "Paired User")
-    assert code is not None
-    assert store.approve_code("matrix", code) is not None
-    assert runner._is_user_authorized(source) is True
-
-    adapter._send_invalid_reaction_feedback = AsyncMock()
-
-    async def react(prompt_id: str, reaction_id: str):
-        prompt = _MatrixApprovalPrompt(
-            session_key=f"session-{prompt_id}",
-            chat_id=room_id,
-            message_id=prompt_id,
-            requester_user_id=user_id,
-        )
-        adapter._approval_prompts_by_event[prompt_id] = prompt
-        event = SimpleNamespace(
-            sender=user_id,
-            event_id=reaction_id,
-            room_id=room_id,
-            content={"m.relates_to": {"event_id": prompt_id, "key": "✅"}},
-        )
-        with patch("tools.approval.resolve_gateway_approval", return_value=1) as resolve:
-            await adapter._on_reaction(event)
-        return prompt, resolve
-
-    before_prompt, before_resolve = await react("$before", "$reaction-before")
-    assert before_prompt.resolved is True
-    before_resolve.assert_called_once_with("session-$before", "once")
-
-    assert store.revoke("matrix", user_id) is True
-    assert store.is_approved("matrix", user_id) is False
-    assert runner._is_user_authorized(source) is False
-
-    after_prompt, after_resolve = await react("$after", "$reaction-after")
-    assert after_prompt.resolved is False
-    after_resolve.assert_not_called()
-
-
-def test_matrix_pairing_revoke_purges_live_allowlist_snapshot(store, monkeypatch):
-    """A live Matrix adapter must not retain an allowlist entry removed by pairing revoke."""
-    from gateway.config import PlatformConfig
-    import gateway.run as gateway_run
-    import hermes_cli.config as cfg
-    from plugins.platforms.matrix.adapter import MatrixAdapter
-
-    owner_id = "@owner:example.org"
-    paired_id = "@paired:example.org"
-    monkeypatch.setenv("MATRIX_ALLOWED_USERS", owner_id)
-    monkeypatch.setattr(
-        cfg,
-        "save_env_value",
-        lambda key, value: os.environ.__setitem__(key, value),
-    )
-    monkeypatch.setattr(
-        cfg,
-        "remove_env_value",
-        lambda key: (os.environ.pop(key, None), True)[1],
-    )
-
-    code = store.generate_code("matrix", paired_id, "Paired User")
-    assert code is not None
-    assert store.approve_code("matrix", code) is not None
-    assert os.environ["MATRIX_ALLOWED_USERS"] == f"{owner_id},{paired_id}"
-
-    adapter = MatrixAdapter(
-        PlatformConfig(
-            enabled=True,
-            extra={"homeserver": "https://matrix.example.org", "user_id": "@bot:example.org"},
-        )
-    )
-    assert adapter._is_authorized_user(paired_id) is True
-    held = adapter._allowed_user_ids  # e.g. a Discord approval view's reference
-
-    runner = SimpleNamespace(
-        adapters={Platform.MATRIX: adapter},
-        _profile_adapters={},
-    )
-    monkeypatch.setattr(gateway_run, "_gateway_runner_ref", lambda: runner)
-
-    assert store.revoke("matrix", paired_id) is True
-    assert os.environ["MATRIX_ALLOWED_USERS"] == owner_id
-    assert paired_id not in adapter._allowed_user_ids
-    assert paired_id not in held
-    assert adapter._is_authorized_user(paired_id) is False

@@ -31,12 +31,6 @@ Lanes:
 * ``npm_lock``    — semantic package-lock.json diff PR comment.
 * ``bootstrap``   — the bootstrap installer lane: install.sh sandbox install,
   pin-fragment drift check, and shipped version-stamp verification.
-* ``desktop_updater`` — the Windows desktop-update hand-off script and the
-  tests that drive the REAL ``windows.ps1`` (``-SelfTestUi`` / pipe drain /
-  retry policy). These are integration tests of a PowerShell process on a
-  shared runner; running them on every Python PR made their timing noise
-  everyone's problem. They still run on push (fail-open) and whenever the
-  script, its siblings, or their tests change.
 * ``rust``        — ``cargo test`` for the Tauri bootstrap installer. ``.rs``
   lives under ``apps/``, so without this lane a Rust change matched ``frontend``
   and only the TypeScript matrix ran.
@@ -148,27 +142,6 @@ _BOOTSTRAP_FILES = {"scripts/install.sh", "setup-hermes.sh"}
 # Windows desktop-update hand-off (scripts/desktop-update/windows.ps1 + the
 # Electron side that launches it) and the pytest files that spawn it.
 # tests/_fixtures/ holds the conftest's platform gating, so it re-arms the lane too.
-_DESKTOP_UPDATER_PATHS = ("scripts/desktop-update/", "tests/_fixtures/")
-_DESKTOP_UPDATER_TEST_PREFIX = "tests/scripts/desktop_update/"
-_DESKTOP_UPDATER_FILES = {
-    "apps/desktop/electron/updater-process.ts",
-    "apps/desktop/electron/managed-ssh-update.ts",
-    # The other half of the marker / result contract the script implements.
-    "apps/desktop/electron/update-marker.ts",
-    "apps/desktop/electron/update-marker-gate.ts",  # the gate's live-marker probe
-    "apps/desktop/electron/handoff-result.ts",
-    # Stops a remote backend for the update the hand-off script then runs.
-    "apps/desktop/electron/remote-lifecycle.ts",
-    # The SSH remote's marker judge/gate programs: marker.sh/marker.ps1's contract, run remotely.
-    "apps/desktop/electron/remote-update-marker-programs.ts",
-    "apps/desktop/electron/remote-update-marker-programs.test.ts",
-    # Python the script runs: the post-update verify and the staged app swap.
-    "hermes_cli/desktop_update_verify.py",
-    "hermes_cli/main_desktop.py",
-    "tests/conftest.py",
-    "pyproject.toml",
-}
-
 # Cross-language fixtures: one data file that tests in several languages read as
 # their shared contract. Editing it is editing every consumer, so it selects each
 # lane that runs one (a path-prefix rule would see only ``tests/`` -> python, and
@@ -179,14 +152,12 @@ _SHARED_FIXTURE_CONSUMERS: dict[str, tuple[str, ...]] = {
     # A7 rule 7: the update-marker parse / judge / release corpus.
     "tests/fixtures/update_marker_corpus.json": (
         "tests/hermes_cli/test_update_marker_corpus.py",  # Python: update_lock
-        "tests/scripts/desktop_update/test_desktop_update_posix_marker_corpus.py",  # marker.sh
-        "tests/scripts/desktop_update/test_desktop_update_windows_marker_corpus.py",  # marker.ps1
     ),
 }
 # What a fixture inherits from its consumers: the lanes that run them as tests.
 # Not the slow suites a consumer's path also matches (an Electron test file under
 # electron/update-* starts the Desktop update E2E, which never reads the corpus).
-_FIXTURE_CONSUMER_LANES = ("python", "rust", "frontend", "desktop_updater")
+_FIXTURE_CONSUMER_LANES = ("python", "rust", "frontend")
 
 # Rust crates — currently just the Tauri bootstrap installer (Hermes-Setup).
 # These live under ``apps/``, so before this lane existed a ``.rs`` edit matched
@@ -250,7 +221,6 @@ _UPDATE_PIPELINE = (
     "hermes_cli/main_dashboard.py",  # hangup protection + update.log mirror
     # Prefix: main_desktop.py (staged Desktop swap / rebuild in the tail) and the
     # main_desktop_* siblings it imports (macOS signing identity).
-    "hermes_cli/main_desktop",
     # Prefix: _early_recovery.py and its _early_recovery_* siblings (ZIP swap journal).
     "hermes_cli/_early_recovery",  # interrupted pull / shim restore at launch
     "hermes_cli/venv_sync.py",  # completion obligation + launch-time tail
@@ -261,11 +231,11 @@ _UPDATE_PIPELINE = (
     "hermes_cli/process_identity.py",  # marker owner liveness
     "hermes_cli/runtime_state.py",
     "hermes_cli/relaunch.py",
+    "hermes_cli/relaunch_scripts.py",
     "hermes_cli/managed_uv.py",
     "hermes_cli/npm_engine.py",
     "hermes_cli/_scan_venv_blockers.py",
     "hermes_cli/dashboard_procs.py",
-    "hermes_cli/desktop_update",  # desktop_update_verify
     "hermes_cli/gateway.py",  # fleet restart / verify
     "hermes_cli/gateway_windows",  # Windows pause / resume
     "hermes_cli/gateway_launchd.py",
@@ -283,7 +253,6 @@ _UPDATE_PIPELINE = (
     "gateway/host_rendezvous.py",
     "gateway/shutdown_forensics.py",
     "gateway/restart.py",
-    "scripts/desktop-update/",  # the hand-off scripts run `hermes update`
 )
 # Selectors are owned by the import graph, not remembered. The update
 # transaction's own modules (what `hermes update` and the launch-time completion
@@ -300,9 +269,6 @@ _UPDATE_ENTRY_POINTS = (
     "hermes_cli/post_update",
     "hermes_cli/venv_sync.py",
     "hermes_cli/_early_recovery",
-    "hermes_cli/main_desktop.py",
-    "hermes_cli/desktop_update_verify.py",
-    "hermes_cli/desktop_build_lock.py",
     "hermes_cli/subcommands/update",
 )
 # The entry points that build or verify the Desktop app inside an update
@@ -310,9 +276,6 @@ _UPDATE_ENTRY_POINTS = (
 _DESKTOP_BUILD_ENTRY_POINTS = (
     "hermes_cli/source_build.py",
     "hermes_cli/source_completion.py",
-    "hermes_cli/main_desktop.py",
-    "hermes_cli/desktop_update_verify.py",
-    "hermes_cli/desktop_build_lock.py",
 )
 # What the entry points import, outside the update_* family and the pipeline above.
 _UPDATE_DEPENDENCIES = (
@@ -326,14 +289,12 @@ _UPDATE_DEPENDENCIES = (
     "agent/memory_provider.py",
     "pm/plugins_state.py",
     "pm/install.py",  # also sealed()/lazy_installs_allowed(): every update's default-tool install
-    "hermes_cli/desktop_build_lock.py",
     "hermes_cli/memory_provider_migration.py",
     "hermes_cli/left_core_migration.py",  # source_build migrates plugins that left core
     "hermes_cli/web_build_limits.py",  # source_build caps the dashboard Node build
-    "hermes_cli/desktop_console.py",
     "hermes_cli/bundled_app.py",
     "hermes_cli/gui_uninstall.py",
-    "hermes_cli/linux_desktop_entry.py",
+    "hermes_cli/desktop_cleanup.py",
     "hermes_cli/github_api.py",  # source_check's release lookup
     "hermes_cli/build_info.py",
     "hermes_cli/image_provenance.py",
@@ -402,8 +363,6 @@ _E2E_LANES: dict[str, tuple[str, ...]] = {
         "hermes_state",
         # Messaging-gated gateway cases: only the e2e job installs the real
         # Discord/Telegram SDKs (tests.yml "Run messaging-gated gateway cases").
-        "tests/gateway/test_native_role_reauthorization.py",
-        "tests/gateway/test_native_telegram_startup_recovery.py",
         "tests/gateway/test_native_pause_notice.py",
         "tests/gateway/test_native_reply_crash_recovery.py",
     ),
@@ -474,7 +433,6 @@ _E2E_LANES: dict[str, tuple[str, ...]] = {
         "scripts/desktop-update/",
         "scripts/install.sh",
         "hermes_cli/update_",
-        "hermes_cli/main_desktop",  # the entry point and the main_desktop_* siblings it imports
         *_DESKTOP_BUILD_ENTRY_POINTS,
         *_UPDATE_DEPENDENCIES,
         # Pipeline modules the Desktop build entry points import directly.
@@ -561,14 +519,6 @@ def _is_scan(p: str) -> bool:
     return p.endswith(_SCAN_EXTS) or p in _SCAN_FILES
 
 
-def _is_desktop_updater(p: str) -> bool:
-    return (
-        p.startswith(_DESKTOP_UPDATER_PATHS)
-        or p.startswith(_DESKTOP_UPDATER_TEST_PREFIX)
-        or p in _DESKTOP_UPDATER_FILES
-    )
-
-
 def _is_rust(p: str) -> bool:
     return (
         p.endswith(".rs")
@@ -611,7 +561,7 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
     deps = any(f == "pyproject.toml" for f in files)
     npm_lock = any(f.split("/")[-1] == "package-lock.json" for f in files)
     docker_meta = any(f.startswith(_DOCKER_META) for f in files)
-    
+
     ret = {
         "python": python,
         "python_prod": python_prod,
@@ -625,7 +575,6 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
         "bootstrap": any(
             f.startswith(_BOOTSTRAP_PATHS) or f in _BOOTSTRAP_FILES for f in files
         ),
-        "desktop_updater": any(_is_desktop_updater(f) for f in files),
         "rust": any(_is_rust(f) for f in files),
         "remote_backends": any(f.startswith(_REMOTE_BACKEND_PATHS) for f in files),
         "catalog": catalog,
@@ -647,7 +596,6 @@ def classify(files: list[str], run_e2e: bool = False) -> dict[str, bool]:
         ret["uv_lock"] = True
         ret["npm_lock"] = True
         ret["bootstrap"] = True
-        ret["desktop_updater"] = True
         ret["rust"] = True
         ret["remote_backends"] = True
         ret["catalog"] = True

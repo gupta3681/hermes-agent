@@ -189,3 +189,44 @@ lock check confirms metadata parity. The Linux arm64 image builds as
 `jarvis-smoke:no-telegram`; all 14 container tests passed, including an explicit check
 that the Telegram SDK is absent. Paid model calls, real messaging, production deployment,
 and the opt-in install/update sandbox suite were not exercised.
+
+## Sixth pass: WhatsApp-only bundled chat and headless CLI
+
+Removed the remaining bundled A2A HTTP server, Buzz, DingTalk, Discord, email, Feishu chat,
+Google Chat, LINE, Matrix, Mattermost, QQBot, Signal, Slack, Teams, WeCom, Weixin and Yuanbao
+platform packages. Removed their dedicated SDK/wire tests, Teams-only meeting ingestion,
+Yuanbao tools, Slack setup/manifest command, vendor send routes, and stale setup/menu entries.
+Shared send routing still supports both WhatsApp transports and independently registered
+plugins. CLI, API server, webhooks, and the shared relay/control-plane backend remain.
+
+The messaging extra now contains shared HTTP and QR support. Discord, Slack, Matrix,
+Google Chat, Teams, DingTalk and WeCom SDK extras are removed and PM regenerated `uv.lock`.
+Docker no longer bakes Matrix/Google Chat or the removed messaging SDKs. Feishu's optional
+Lark SDK and document/drive tools are retained as agent capabilities; its chat adapter is gone.
+The legacy `sms` extra name is only an aiohttp compatibility alias, not an SMS implementation.
+
+Removed desktop launch/build/signing code, its build lock and console handling, executable
+verification, desktop hand-off scripts/UI, and GUI command registration. Headless source updates
+still run dependency and plugin/memory migrations; old desktop completion flags cannot trigger
+an app build. CLI relaunch script checks moved to `relaunch_scripts.py`. Old-install removal
+paths/cache refresh live in `desktop_cleanup.py`, independent of launcher creation. Existing
+uninstall support, persisted data, and shared backend APIs remain.
+
+Shared FIFO/cancellation, provenance, scoped secrets, webhook HMAC, queued delivery, notifications,
+and plugin extension tests exercise the real WhatsApp adapters or their shared boundaries.
+Concurrent callbacks use WhatsApp Cloud and serial-reader tests use the bridge. The local agent
+forwarding sanitizer moved beside its retained RPC consumer before the A2A server was removed.
+This does not choose new group roles, DM policy, memory ownership, or tenant isolation semantics.
+
+Retired the CI lane for the deleted Windows desktop hand-off process. Source-update and
+native OS gates remain, and their classifier/consumer replay tests run against the actual
+workflow definitions. Fixed an obsolete Telegram setup re-export in the gateway CLI facade.
+
+Sixth-pass verification: 1,110 regression tests passed across 108 files, with 35 host/platform
+skips. A clean Linux snapshot passed all 315 selected source-update, legacy uninstall, owned
+headless-contract and CI routing tests. The Linux arm64 image `jarvis-smoke:whatsapp-only`
+built successfully and passed all 14 container tests, including gateway imports and absence
+of the removed messaging SDKs. All 12 repository checks passed, with zero blocking or
+advisory code-health findings. PM's lock check confirms metadata parity. No live messaging,
+paid model calls, account linking, production deployment, or opt-in install/update sandbox
+journeys were exercised.

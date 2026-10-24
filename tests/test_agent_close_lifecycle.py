@@ -103,39 +103,6 @@ class TestBatchRunnerClosesAgent:
 # ── feishu comment agent: one per comment run in the gateway ───────────────
 
 
-class TestFeishuCommentClosesAgent:
-    def _run(self, monkeypatch):
-        from plugins.platforms.feishu import feishu_comment
-
-        RecordingAgent.reset()
-        monkeypatch.setattr("run_agent.AIAgent", RecordingAgent)
-        monkeypatch.setattr(feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {}))
-        # session_key="" keeps the cross-card history cache out of the test.
-        response = feishu_comment._run_comment_agent("hi", client=None, session_key="")
-        return response
-
-    def test_agent_closed_after_successful_comment(self, monkeypatch):
-        response = self._run(monkeypatch)
-        assert response == "ok"
-        assert len(RecordingAgent.instances) == 1
-        assert RecordingAgent.instances[0].closed
-
-    def test_agent_closed_when_run_fails(self, monkeypatch):
-        from plugins.platforms.feishu import feishu_comment
-
-        class FailingAgent(RecordingAgent):
-            def __init__(self, *args, **kwargs):
-                kwargs["_fail"] = True
-                super().__init__(*args, **kwargs)
-
-        FailingAgent.instances = []
-        monkeypatch.setattr("run_agent.AIAgent", FailingAgent)
-        monkeypatch.setattr(feishu_comment, "_resolve_model_and_runtime", lambda: ("m", {}))
-        response = feishu_comment._run_comment_agent("hi", client=None, session_key="")
-        assert response == ""
-        assert FailingAgent.instances[0].closed
-
-
 # ── tui_gateway prompt.background: one side agent per bg turn ──────────────
 
 

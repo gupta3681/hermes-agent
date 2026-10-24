@@ -35,7 +35,7 @@ NEEDS_JSON_OUTPUT = "needs-json"
 # rather than a release.
 _UPDATE_CONSUMER_LANES = {
     "tests": ("python", "e2e", "e2e_upgrade"),
-    "tests-os": ("python", "desktop_updater", "e2e", "e2e_upgrade"),
+    "tests-os": ("python", "e2e", "e2e_upgrade"),
     "e2e-desktop-update": ("e2e_desktop_update",),
     "remote-backends": ("remote_backends",),
     "catalog-tests": ("catalog",),

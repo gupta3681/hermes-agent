@@ -19,19 +19,18 @@ from gateway.run import GatewayRunner, _load_gateway_config, _profile_runtime_sc
 from gateway.run_turn_runner import TurnRunner
 from gateway.session import SessionSource
 from gateway.turn_context import TurnContext
-from plugins.platforms.slack.adapter import SlackAdapter
 from tests.gateway.relay.stub_connector import StubConnector
 
 
 @pytest.mark.parametrize("relay", [False, True])
 @pytest.mark.parametrize("thread_id", [None, "1700.1"])
 @pytest.mark.parametrize("enabled", [False, True])
-def test_warning_policy_reaches_slack_transport(tmp_path, monkeypatch, relay, thread_id, enabled):
+def test_warning_policy_reaches_native_and_relay_transports(tmp_path, monkeypatch, relay, thread_id, enabled):
     from gateway import run
 
     (tmp_path / "config.yaml").write_text(f"display: {{suppress_warning_notifications: {str(not enabled).lower()}}}")
     monkeypatch.setattr(run, "_hermes_home", tmp_path)
-    source = SessionSource(platform=Platform.SLACK, chat_id="D1", chat_type="dm", user_id="U1", thread_id=thread_id)
+    source = SessionSource(platform=Platform.SLACK if relay else Platform.WHATSAPP_CLOUD, chat_id="D1", chat_type="dm", user_id="U1", thread_id=thread_id)
     metadata = {"thread_id": thread_id} if thread_id else {}
     pc = PlatformConfig(extra={"reply_in_thread": bool(thread_id)})
     if relay:
@@ -43,17 +42,14 @@ def test_warning_policy_reaches_slack_transport(tmp_path, monkeypatch, relay, th
         adapter._capture_scope(MessageEvent(text="hello", source=source, message_type=MessageType.TEXT))
         sent = transport.sent
     else:
-        adapter = SlackAdapter(pc)
-        client = AsyncMock()
-        client.chat_postMessage.return_value = {"ok": True, "ts": "1700.2"}
-        client.chat_update.return_value = {"ok": True, "ts": "1700.2"}
-        adapter._app = SimpleNamespace(client=client)
+        from plugins.platforms.whatsapp_cloud.adapter import WhatsAppCloudAdapter
+        adapter = WhatsAppCloudAdapter(pc)
+        adapter._http_client = object()  # transport is replaced by the capture below
         sent = []
-        async def post(**kwargs):
-            sent.append(kwargs)
-            return {"ok": True, "ts": "1700.2"}
-        client.chat_postMessage.side_effect = post
-        client.chat_update.side_effect = post
+        async def post(payload, **kwargs):
+            sent.append(payload)
+            return [{"id": "synthetic-message"}], None
+        adapter._post_messages = post
     gateway = object.__new__(GatewayRunner)
     gateway.config = None
     gateway._delivery_adapter_for = lambda source: adapter
@@ -75,7 +71,7 @@ def test_warning_policy_reaches_slack_transport(tmp_path, monkeypatch, relay, th
     if relay:
         assert sent[-1]["metadata"].get("thread_id") == thread_id
     else:
-        assert sent[-1].get("thread_ts") == thread_id
+        assert sent[-1]["to"] == "D1"
 
 
 def test_profile_config_isolated_for_callbacks_and_direct_warnings(tmp_path, monkeypatch):

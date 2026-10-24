@@ -101,6 +101,11 @@ Desktop, bootstrap installer, Ink terminal UI, browser dashboard frontend, and t
 build are removed. Reference docs remain under `website/docs/`. Do not restore these surfaces
 as an automatic repair. Telegram, IRC, ntfy, SimpleX, BlueBubbles, SMS/Twilio, and Photon iMessage
 adapters are also removed, along with Raft and the achievements dashboard plugin.
+The only bundled chat adapters are now `whatsapp` and `whatsapp_cloud`. Other chat transports,
+Teams meeting ingestion, and Yuanbao-specific tools are retired. Preserve API/webhook and
+shared control-plane infrastructure; legacy serialized identifiers are not live adapters.
+Desktop launch/build/update entrypoints are retired. `desktop_cleanup.py` supports only
+removing old installations; CLI script admission lives in `relaunch_scripts.py`.
 See `docs/jarvis/PRUNING.md` for retained dependencies and verification.
 
 Desktop packaging/publication code under `scripts/bundles` is retired. Shared build code

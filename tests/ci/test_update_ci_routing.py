@@ -213,18 +213,6 @@ def _selected_test_files(node: dict, name: str, *, windows_only: bool = False) -
     return selected
 
 
-def _windows_desktop_updater_tests_selected(run: dict) -> bool:
-    """tests-os os-tests runs, and its Windows step keeps the desktop-update hand-off files."""
-    os_tests = _reached(run, "tests-os", "os-tests")
-    if os_tests is None:
-        return False
-    selected = _selected_test_files(os_tests, "Run ${{ matrix.marker }} tests", windows_only=True)
-    expected = {p.relative_to(_REPO).as_posix() for p in
-                (_REPO / "tests/scripts/desktop_update").glob("test_desktop_update_windows_*.py")}
-    assert expected, "no Windows hand-off consumers exist"
-    return expected <= selected
-
-
 # Each real consumer of a lane, as a path of job names from ci.yaml down.
 _CONSUMERS: dict[str, tuple[tuple[str, ...], ...]] = {
     "e2e_upgrade": (
@@ -237,9 +225,6 @@ _CONSUMERS: dict[str, tuple[tuple[str, ...], ...]] = {
 
 
 def _consumers_reached(run: dict, lane: str) -> dict[str, bool]:
-    if lane == "desktop_updater":
-        return {"tests-os/os-tests[windows] keeps test_desktop_update_windows_*":
-                _windows_desktop_updater_tests_selected(run)}
     reached = {}
     for path in _CONSUMERS[lane]:
         node = _reached(run, *path)
@@ -251,7 +236,7 @@ def _consumers_reached(run: dict, lane: str) -> dict[str, bool]:
     return reached
 
 
-_GATED = ("python", "desktop_updater", "e2e", "e2e_upgrade")
+_GATED = ("python", "e2e", "e2e_upgrade")
 
 
 def test_replay_evaluator_follows_actions_semantics():
@@ -274,11 +259,11 @@ def test_every_set_lane_reaches_its_consumer_whatever_the_other_lanes_say(combo)
     lanes = {k: False for k in cc.classify(["README.md"])}
     lanes.update(zip(_GATED, combo))
     run = _ci_run(lanes)
-    for lane in ("desktop_updater", "e2e", "e2e_upgrade"):
+    for lane in ("e2e", "e2e_upgrade"):
         reached = _consumers_reached(run, lane)
         if lanes[lane]:
             assert all(reached.values()), f"{lane}=true but not dispatched: {reached}"
-        elif lane != "desktop_updater":
+        else:
             assert not any(reached.values()), f"{lane}=false but ran anyway: {reached}"
 
 
@@ -287,7 +272,7 @@ def test_every_set_lane_reaches_its_consumer_whatever_the_other_lanes_say(combo)
 _R15_CASES = {
     "scripts/build/web.mjs": ("e2e_upgrade",),
     "hermes_cli/_subprocess_compat.py": ("e2e_upgrade",),
-    "hermes_cli/desktop_build_lock.py": ("e2e_upgrade",),
+    "hermes_cli/relaunch_scripts.py": ("e2e_upgrade",),
     "hermes_cli/memory_provider_migration.py": ("e2e_upgrade",),
     "hermes_cli/source_build.py": ("e2e_upgrade",),
     "hermes_cli/source_completion.py": ("e2e_upgrade",),
@@ -327,8 +312,6 @@ def test_update_path_change_selects_every_suite_that_exercises_it(path, lanes):
         if lane.startswith("e2e"):
             reached = _consumers_reached(run, lane)
             assert all(reached.values()), f"{path}: {lane}=true never reaches {reached}"
-        if lane == "desktop_updater":
-            assert _windows_desktop_updater_tests_selected(run), f"{path}: desktop_updater never reaches its tests"
 
 
 # Review CI2/CI3: update-path files the classifier sent to the wrong suites.
@@ -345,8 +328,6 @@ def test_update_path_change_reaches_the_suites_that_consume_it(path, lanes):
 
 
 _TAURI_UPDATER = tuple(f"apps/bootstrap-installer/src-tauri/src/{name}.rs" for name in ("marker", "update", "paths"))
-
-
 
 
 def test_gateway_status_routing_names_the_stamp_not_its_prefix_siblings():
@@ -380,7 +361,6 @@ def _fixture_lanes_reached(fixture: str) -> dict[str, bool]:
     run = _ci_run(classified)
     reached = {lane: classified[lane] and _reached(run, *job) is not None
                for lane, job in _FIXTURE_LANE_JOBS.items()}
-    reached["desktop_updater"] = classified["desktop_updater"] and _windows_desktop_updater_tests_selected(run)
     return reached
 
 
@@ -462,7 +442,6 @@ def test_native_windows_lane_selects_the_replay_and_its_controls():
 _REQUIRED_STEP_CASES = (
     ("e2e_upgrade", ".github/workflows/tests.yml", "e2e-upgrade", "Run upgrade e2e tests"),
     ("e2e_upgrade", ".github/workflows/windows-install-update-e2e.yml", "install-update", "Run Windows install + update E2E"),
-    ("desktop_updater", ".github/workflows/tests-os.yml", "os-tests", "Run ${{ matrix.marker }} tests"),
     ("e2e", ".github/workflows/tests.yml", "e2e", "Run e2e tests"),
     ("e2e", ".github/workflows/tests-os.yml", "e2e-windows", "Run Windows E2E suite"),
 )
@@ -518,15 +497,15 @@ def test_selection_receipt_does_not_require_the_native_jobs_venv(tmp_path):
 
 @_NATIVE_WINDOWS_TOO
 def test_replay_uses_executed_gate_output(monkeypatch):
-    path = "apps/desktop/electron/handoff-result.ts"
-    assert all(_consumers_reached(_ci_run(_real_classifier([path])), "desktop_updater").values())
+    path = "hermes_cli/relaunch_scripts.py"
+    assert all(_consumers_reached(_ci_run(_real_classifier([path])), "e2e_upgrade").values())
     workflow = _mutated_yaml(monkeypatch, ".github/workflows/ci.yaml")
     gate = next(s for s in workflow["jobs"]["detect"]["steps"] if s.get("id") == "gate-lanes")
     needle = "    for lane, value in values.items():"
     assert needle in gate["run"]
-    gate["run"] = gate["run"].replace(needle, "    values['desktop_updater'] = 'false'\n" + needle)
+    gate["run"] = gate["run"].replace(needle, "    values['e2e_upgrade'] = 'false'\n" + needle)
     with pytest.raises(AssertionError):
-        test_update_owner_change_dispatches_its_suites_end_to_end(path, ("desktop_updater",))
+        test_update_owner_change_dispatches_its_suites_end_to_end(path, ("e2e_upgrade",))
 
 
 _PROBE_STEP = {"run": r'''python3 -c 'import sys; print("py3=" + sys.executable)' >> "$GITHUB_OUTPUT"
@@ -753,8 +732,6 @@ def test_build_scripts_the_update_runs_start_the_upgrade_suite():
     assert "scripts/build/web.mjs" in reached, "seed scan broke: source_build runs web.mjs"
     unowned = sorted(f for f in reached if not cc.classify([f])["e2e_upgrade"])
     assert unowned == []
-
-
 
 
 # -- strict acceptance: the dispatch input reaches every E2E suite's environment ------------

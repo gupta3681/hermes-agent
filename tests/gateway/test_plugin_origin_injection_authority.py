@@ -1,6 +1,6 @@
 """``inject_message(origin=...)`` under the session authority answers ``False`` up front for a chat
 the FIFO cannot admit it into (no human message admitted there yet), instead of ``True`` for a
-message the dispatch then drops (PLG-6). Real GatewayRunner, DiscordAdapter and SessionAuthority.
+message the dispatch then drops (PLG-6). Real GatewayRunner, WhatsAppAdapter and SessionAuthority.
 """
 import asyncio
 
@@ -42,17 +42,17 @@ async def test_origin_injection_is_refused_up_front_until_the_chat_holds_a_human
     from gateway.session_authority import initialize_session_authority
     from gateway.session_results import execution_result
     from hermes_constants import get_hermes_home
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv("DISCORD_ALLOWED_USERS", "42")
+    monkeypatch.setenv("WHATSAPP_ALLOWED_USERS", "42")
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token="fixture-token", typing_indicator=False))
 
     async def send(chat_id, content, reply_to=None, metadata=None):
         return SendResult(success=True, message_id="sent")
     monkeypatch.setattr(adapter, "send", send)
     adapter.gateway_runner = runner
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id="default", instance_id="owner")
     runner._wire_adapter_handlers(adapter)
     executed = []
@@ -67,7 +67,7 @@ async def test_origin_injection_is_refused_up_front_until_the_chat_holds_a_human
 
     ctx, manager = _context(get_hermes_home())
     _publish(runner, manager)
-    origin = {"platform": "discord", "chat_id": "42", "chat_type": "dm", "user_id": "42"}
+    origin = {"platform": "whatsapp", "chat_id": "42", "chat_type": "dm", "user_id": "42"}
     source = adapter.build_source(chat_id="42", chat_type="dm", user_id="42")
     key = runner.session_store._generate_session_key(source)
 

@@ -9,11 +9,9 @@ CONNECTOR's constructed REST payloads against them — so cross-repo renderer
 drift breaks a test instead of a user's formatting.
 
 Oracles (all imported, never reimplemented):
-  slack     plugins.platforms.slack.adapter.SlackAdapter.format_message
             (standard markdown → Slack mrkdwn)
   whatsapp  gateway.platforms.whatsapp_common.WhatsAppBehaviorMixin
             .format_message (standard markdown → WhatsApp formatting)
-  discord   plugins.platforms.discord.adapter.DiscordAdapter.format_message
             (GFM tables → bullet groups; otherwise identity)
 
 Expect semantics (consumed by the gg runner):
@@ -133,8 +131,6 @@ def corpus() -> list[dict[str, str]]:
 
 
 def _oracles() -> dict[str, Callable[[str], str]]:
-    from plugins.platforms.slack.adapter import SlackAdapter
-    from plugins.platforms.discord.adapter import DiscordAdapter
     from gateway.platforms.whatsapp_common import WhatsAppBehaviorMixin
 
     wa = object.__new__(WhatsAppBehaviorMixin)  # format_message needs no __init__
@@ -142,8 +138,6 @@ def _oracles() -> dict[str, Callable[[str], str]]:
     return {
         # These format_message implementations are self-free (asserted by
         # tests/conformance/test_vector_generator.py) — invoked unbound.
-        "slack": lambda s: SlackAdapter.format_message(None, s),  # type: ignore[arg-type]
-        "discord": lambda s: DiscordAdapter.format_message(None, s),  # type: ignore[arg-type]
         "whatsapp": wa.format_message,
     }
 
@@ -151,18 +145,11 @@ def _oracles() -> dict[str, Callable[[str], str]]:
 # Per-platform expect overrides (default: parity).
 # Keyed by vector id; value = (expect, note).
 _EXPECT_OVERRIDES: dict[str, dict[str, tuple]] = {
-    "slack": {
-        "placeholder-injection": ("divergent", "\\x00SL tokens are the native renderer's own placeholder alphabet; connector uses a different scheme"),
-        "unclosed-fence": ("divergent", "unterminated fence handling differs; both degrade without dropping content"),
-    },
     "whatsapp": {
         "placeholder-injection": ("divergent", "placeholder alphabets are renderer-internal"),
         "unclosed-fence": ("divergent", "unterminated fence handling differs; both degrade without dropping content"),
     },
-    "discord": {
-        "table-simple": ("divergent", "native converts GFM tables to bullet groups; connector passes raw markdown through (port deferred — parity report Phase 4/oracle section)"),
-        "table-cjk": ("divergent", "same as table-simple"),
-    },
+
 }
 
 

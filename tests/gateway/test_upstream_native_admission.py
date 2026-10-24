@@ -45,12 +45,15 @@ def _fresh_native_event(
 async def test_upstream_authorized_adapter_admits_fresh_native_without_allowlist(
     tmp_path, monkeypatch
 ):
-    from plugins.platforms.a2a.adapter import A2AAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+
+    class UpstreamTestAdapter(WhatsAppAdapter):
+        authorization_is_upstream = True
 
     _clear_authz_env(monkeypatch)
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / "sessions"))
-    adapter = A2AAdapter(PlatformConfig(enabled=True))
-    runner.adapters = {Platform("a2a"): adapter}
+    adapter = UpstreamTestAdapter(PlatformConfig(enabled=True))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     source = adapter.build_source(
         chat_id="ctx-1",
         chat_name="a2a:peer",
@@ -72,14 +75,14 @@ async def test_non_upstream_adapter_still_default_denies_without_allowlist(
     _clear_authz_env(monkeypatch)
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / "sessions"))
     runner.adapters = {
-        Platform.DISCORD: SimpleNamespace(
+        Platform.WHATSAPP: SimpleNamespace(
             send=AsyncMock(),
             authorization_is_upstream=False,
             enforces_own_access_policy=False,
         )
     }
     discord_source = SessionSource(
-        platform=Platform.DISCORD,
+        platform=Platform.WHATSAPP,
         user_id="123",
         chat_id="456",
         user_name="someone",
@@ -99,13 +102,16 @@ async def test_upstream_authorized_a2a_input_admits_durally_with_provenance(
     from gateway.session_ingress_context import native_callback, register_transport_home
     from hermes_constants import get_hermes_home
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.a2a.adapter import A2AAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
+
+    class UpstreamTestAdapter(WhatsAppAdapter):
+        authorization_is_upstream = True
 
     _clear_authz_env(monkeypatch)
     monkeypatch.setattr(SessionAuthority, "_schedule", lambda self, ref: None)
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / "sessions"))
-    adapter = A2AAdapter(PlatformConfig(enabled=True))
-    runner.adapters = {Platform("a2a"): adapter}
+    adapter = UpstreamTestAdapter(PlatformConfig(enabled=True))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(
         runner, profile_id="default", instance_id="a2a-upstream"
     )
@@ -124,7 +130,7 @@ async def test_upstream_authorized_a2a_input_admits_durally_with_provenance(
         authority.db, session_id=receipt.ref.session_id, pending_only=False
     )[-1]["payload"]
     assert payload["text"] == "a2a task from a bearer-authenticated peer"
-    assert payload["native_text_v1"]["provenance"]["platform"] == "a2a"
+    assert payload["native_text_v1"]["provenance"]["platform"] == "whatsapp"
 
 
 @pytest.mark.asyncio
@@ -138,9 +144,12 @@ async def test_same_principal_without_adapter_declaration_is_refused_by_native_a
     from gateway.session_authority import SessionAuthority, initialize_session_authority
     from gateway.session_ingress_context import native_callback, register_transport_home
     from hermes_constants import get_hermes_home
-    from plugins.platforms.a2a.adapter import A2AAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    class UndeclaredAdapter(A2AAdapter):
+    class UpstreamTestAdapter(WhatsAppAdapter):
+        authorization_is_upstream = True
+
+    class UndeclaredAdapter(WhatsAppAdapter):
         @property
         def authorization_is_upstream(self) -> bool:
             return False
@@ -149,7 +158,7 @@ async def test_same_principal_without_adapter_declaration_is_refused_by_native_a
     monkeypatch.setattr(SessionAuthority, "_schedule", lambda self, ref: None)
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / "sessions"))
     adapter = UndeclaredAdapter(PlatformConfig(enabled=True))
-    runner.adapters = {Platform("a2a"): adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(
         runner, profile_id="default", instance_id="a2a-undeclared"
     )

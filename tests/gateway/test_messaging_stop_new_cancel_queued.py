@@ -3,7 +3,7 @@
 Under session authority every busy follow-up is admitted to the durable FIFO, so clearing the
 adapter's pending slot no longer reached it: /stop let the drain RUN the message the user meant
 to cancel, and /new stranded it queued on the abandoned session. Real GatewayRunner busy
-dispatch, real DiscordAdapter, real authority over a real SessionDB; only the turn executor is
+dispatch, real WhatsAppAdapter, real authority over a real SessionDB; only the turn executor is
 recorded.
 """
 import asyncio
@@ -22,13 +22,13 @@ async def test_busy_stop_and_new_cancel_the_queued_messaging_followup(tmp_path, 
     from gateway.session_ingress_context import native_callback
     from hermes_constants import get_hermes_home
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')

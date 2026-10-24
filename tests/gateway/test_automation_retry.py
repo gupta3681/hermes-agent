@@ -14,18 +14,18 @@ async def test_coalesced_siblings_survive_lost_ack_and_owner_restart(tmp_path, m
     from gateway.session_ingress_context import native_callback
     from hermes_state_runtime import list_session_admissions
     from tests.gateway.test_completion_admission import pending
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     from tools import async_delegation as delegation
 
     # Fault boundary: stop after the actual SQLite commit but before execution.
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='before')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     human = MessageEvent(text='human', source=source, message_id='human')
     from hermes_constants import get_hermes_home
     with native_callback(runner, human, get_hermes_home()):
@@ -66,14 +66,14 @@ async def test_unowned_completion_refunds_every_sibling_without_consuming_budget
     from hermes_constants import get_hermes_home
     from hermes_state_runtime import list_session_admissions
     from tests.gateway.test_completion_admission import pending
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     from tools import async_delegation as delegation
 
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='guards')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
@@ -90,7 +90,7 @@ async def test_unowned_completion_refunds_every_sibling_without_consuming_budget
         assert (record['delivery_state'], record['delivery_attempts']) == ('pending', 0)
     assert len(list_session_admissions(authority.db, session_id=sid, pending_only=False)) == 1
     # An explicit live but foreign parent must not be switched into this route.
-    authority.db.create_session('other-owner', source='discord')
+    authority.db.create_session('other-owner', source='whatsapp')
     for event in events:
         event['parent_session_id'] = 'other-owner'
     for _ in range(10):

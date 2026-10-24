@@ -6,10 +6,10 @@ a release that moves ``uv.lock`` (``hermes update``), ``hermes pm repair``, and 
 user-visible contract is that whatever feature the user had working before the rebuild still
 imports in the generation selected after it:
 
-* an extra the user installed with the documented command (``hermes pm install --extra slack``);
+* an extra the user installed with the documented command (``hermes pm install --extra feishu``);
 * the MCP client (an HTTP MCP server in config.yaml must still connect: ``hermes mcp test``
   against a real local streamable-HTTP server);
-* a gateway platform enabled in config.yaml (Discord): the update installs the platform's extra
+* a gateway platform enabled in config.yaml (WhatsApp Cloud): the update installs the platform's extra
   instead of only warning that the SDK is missing (#124228);
 * extras a main-era venv carried (``[all]`` plus ``[messaging]``) across the
   legacy-venv migration to the first PM generation.
@@ -44,7 +44,7 @@ pytestmark = [
 ]
 
 MCP_NAME = "e2e-http"
-MANAGED = ("slack_bolt", "discord", "mcp.client.streamable_http")
+MANAGED = ("lark_oapi", "aiohttp", "mcp.client.streamable_http")
 
 
 def _mcp_test(sb: I.Sandbox, server: HttpMcpServer) -> str:
@@ -72,14 +72,14 @@ def rebuilt(tmp_path_factory, provider):
         sb, origin = P.install_head(root)
         P.configure(
             sb, provider.base_url,
-            extra=("platforms:\n  discord:\n    enabled: true\n"
+            extra=("platforms:\n  aiohttp:\n    enabled: true\n"
                    f"mcp_servers:\n  {MCP_NAME}:\n    url: {server.url}\n    connect_timeout: 30\n    timeout: 30\n"),
-            env_extra="DISCORD_BOT_TOKEN=fake-e2e-discord-token\n")
-        P.ok(sb.cli("pm", "install", "--extra", "slack"), "the documented extra install failed")
+            env_extra="DISCORD_BOT_TOKEN=fake-e2e-aiohttp-token\n")
+        P.ok(sb.cli("pm", "install", "--extra", "feishu"), "the documented extra install failed")
         before = {"generation": P.selected_generation(sb), "imports": P.managed_imports(sb, *MANAGED),
                   "mcp": _mcp_test(sb, server)}
-        assert before["imports"]["slack_bolt"] == "ok" and before["mcp"] == "", (
-            f"harness: `hermes pm install --extra slack` exited 0 but left no SDK / MCP broken: {before}")
+        assert before["imports"]["lark_oapi"] == "ok" and before["mcp"] == "", (
+            f"harness: `hermes pm install --extra feishu` exited 0 but left no SDK / MCP broken: {before}")
         P.publish_dependency_release(origin, root, 1)
         up = P.update(sb)
         after_update = {"generation": P.selected_generation(sb), "imports": P.managed_imports(sb, *MANAGED),
@@ -98,8 +98,8 @@ def test_update_rebuild_keeps_installed_extra_and_mcp(rebuilt):
     assert up.returncode == 0, "hermes update failed:\n" + P.diagnostics(sb, up)
     assert after["generation"] != rebuilt["before"]["generation"], (
         "harness: the dependency release did not make the update build a new generation\n" + P.diagnostics(sb, up))
-    assert after["imports"]["slack_bolt"] == "ok", (
-        f"the extra installed with `hermes pm install --extra slack` is gone after `hermes update`: "
+    assert after["imports"]["lark_oapi"] == "ok", (
+        f"the extra installed with `hermes pm install --extra feishu` is gone after `hermes update`: "
         f"{after['imports']}\n" + P.diagnostics(sb, up))
     assert after["imports"]["mcp.client.streamable_http"] == "ok", after["imports"]
     assert after["mcp"] == "", "HTTP MCP server no longer connects after `hermes update`:\n" + after["mcp"]
@@ -110,8 +110,8 @@ def test_repair_keeps_installed_extra_and_mcp(rebuilt):
     assert rp.returncode == 0, "hermes pm repair failed on a healthy install:\n" + P.diagnostics(sb, rp)
     assert after["generation"] != rebuilt["after_update"]["generation"], (
         "`hermes pm repair` reported success but did not rebuild the environment\n" + P.diagnostics(sb, rp))
-    assert after["imports"]["slack_bolt"] == "ok", (
-        f"the extra installed with `hermes pm install --extra slack` is gone after `hermes pm repair`: "
+    assert after["imports"]["lark_oapi"] == "ok", (
+        f"the extra installed with `hermes pm install --extra feishu` is gone after `hermes pm repair`: "
         f"{after['imports']}\n" + P.diagnostics(sb, rp))
     assert after["mcp"] == "", "HTTP MCP server no longer connects after `hermes pm repair`:\n" + after["mcp"]
 
@@ -119,8 +119,8 @@ def test_repair_keeps_installed_extra_and_mcp(rebuilt):
 def test_configured_gateway_platform_has_its_sdk_after_update(rebuilt):
     sb, up, after = rebuilt["sb"], rebuilt["update"], rebuilt["after_update"]
     assert up.returncode == 0, P.diagnostics(sb, up)
-    assert after["imports"]["discord"] == "ok", (
-        f"configured discord platform has no SDK after `hermes update`: {after['imports']['discord']}\n"
+    assert after["imports"]["aiohttp"] == "ok", (
+        f"configured aiohttp platform has no SDK after `hermes update`: {after['imports']['aiohttp']}\n"
         + P.diagnostics(sb, up))
 
 
@@ -132,7 +132,7 @@ def test_configured_gateway_platform_has_its_sdk_after_update(rebuilt):
 @pytest.fixture(scope="module")
 def migrated(tmp_path_factory, provider):
     """Release N-1 installed main-era style (``venv/`` from N-1's own uv.lock with ``[all]``) plus
-    the ``[messaging]`` extra (Telegram, Discord, Slack SDKs) the main-era docs installed, then
+    the ``[messaging]`` extra (Telegram, WhatsApp Cloud, Slack SDKs) the main-era docs installed, then
     updated to HEAD."""
     if not _refs().base_tag:
         pytest.skip("no release tag reachable before HEAD (fetch tags)")
@@ -151,7 +151,7 @@ def migrated(tmp_path_factory, provider):
         assert "messaging" in tomllib.load(fh)["project"]["optional-dependencies"], "harness: N-1 has no messaging extra"
     (leg.hermes_home / "config.yaml").write_text(I.provider_config(provider.base_url, None), encoding="utf-8")
     (leg.hermes_home / ".env").write_text(f"OPENAI_API_KEY={I.FAKE_KEY}\n", encoding="utf-8")
-    probe = "import slack_bolt, discord, mcp.client.streamable_http; print('ok')"
+    probe = "import lark_oapi, aiohttp, mcp.client.streamable_http; print('ok')"
     pre = leg.run("-c", probe, argv0=leg.python)
     I.git("update-ref", "refs/heads/main", _refs().head, cwd=leg.origin)
     up = leg.run(*_RETRY_PREFIX[1:], leg.hermes, "update", "--yes", "--branch", "main",
@@ -166,12 +166,12 @@ def test_legacy_venv_features_carry_into_the_first_pm_generation(migrated):
     assert I.git("rev-parse", "HEAD", cwd=leg.install) == _refs().head, H.describe(up)
     selected = Path(leg.python)
     assert "installs" in selected.parts, f"update left the install on the legacy venv: {selected}\n{H.describe(up)}"
-    code = ("import importlib, json\nout = {}\nfor m in ('slack_bolt', 'discord', 'mcp.client.streamable_http'):\n"
+    code = ("import importlib, json\nout = {}\nfor m in ('lark_oapi', 'aiohttp', 'mcp.client.streamable_http'):\n"
             "    try:\n        importlib.import_module(m); out[m] = 'ok'\n"
             "    except BaseException as e:\n        out[m] = f'{type(e).__name__}: {e}'\nprint(json.dumps(out))\n")
     cp = leg.run("-c", code, argv0=str(selected))
     assert cp.returncode == 0, H.describe(cp)
-    lost = [m for m in ("slack_bolt", "discord") if f'"{m}": "ok"' not in cp.stdout]
+    lost = [m for m in ("lark_oapi", "aiohttp") if f'"{m}": "ok"' not in cp.stdout]
     assert not lost, (
         f"messaging SDKs the main-era venv carried are gone from the first PM generation: {lost} {cp.stdout}\n"
         + H.describe(up))

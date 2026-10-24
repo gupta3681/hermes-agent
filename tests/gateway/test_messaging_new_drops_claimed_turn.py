@@ -5,7 +5,7 @@ in the drain, so without a fence it resolved the route's fresh session and ran t
 adopts its agent and the Stop that /new sent is lost. That holds for a viewer's submit into a chat
 too. A move that sends no Stop (/resume) keeps main's behaviour, and a compression is no move even
 with a Stop latched (the turn reaches the tip, where adoption fires it). Real GatewayRunner,
-DiscordAdapter, SessionAuthority, drain and session resolver over a real SessionDB; preparation is
+WhatsAppAdapter, SessionAuthority, drain and session resolver over a real SessionDB; preparation is
 a stand-in.
 """
 import asyncio
@@ -27,11 +27,11 @@ async def test_route_move_after_claim(monkeypatch, case):
     from gateway.session_ingress import executing_admission
     from gateway.session_results import execution_result
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
 
     sent = []
 
@@ -39,7 +39,7 @@ async def test_route_move_after_claim(monkeypatch, case):
         sent.append(content)
         return SendResult(success=True, message_id='s')
     monkeypatch.setattr(adapter, 'send', send)
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     monkeypatch.setattr(runner, '_read_user_config', lambda: {'approvals': {'destructive_slash_confirm': False}})
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
@@ -74,10 +74,10 @@ async def test_route_move_after_claim(monkeypatch, case):
         await adapter.handle_message(MessageEvent(text='/new', source=source, message_id='new'))
         await async_wait_until(lambda: sent, what='the /new reply')
     elif case == 'resume':  # an idle /resume before the turn's busy guard: no Stop is sent
-        db.create_session('R', source='discord')
+        db.create_session('R', source='whatsapp')
         assert store.switch_session(key, 'R', expected_session_id=claimed) is not None
     else:  # a compression continuation, and a /stop in the same window
-        db.create_session('tip', source='discord', parent_session_id=claimed)
+        db.create_session('tip', source='whatsapp', parent_session_id=claimed)
         db.end_session(claimed, end_reason='compression')
         assert store.advance_compression_session(key, claimed, 'tip') is not None
         await adapter.handle_message(MessageEvent(text='/stop', source=source, message_id='stop'))

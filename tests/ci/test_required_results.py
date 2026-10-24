@@ -39,7 +39,6 @@ def test_status_policy(job, result, ordinary, excluded, release):
     ("python", ("tests", "tests-os")),
     ("e2e", ("tests", "tests-os")),
     ("e2e_upgrade", ("tests", "tests-os")),
-    ("desktop_updater", ("tests-os",)),
     ("e2e_desktop_update", ("e2e-desktop-update",)),
     ("remote_backends", ("remote-backends",)),
     ("catalog", ("catalog-tests",)),

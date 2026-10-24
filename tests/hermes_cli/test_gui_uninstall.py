@@ -55,7 +55,7 @@ def test_gui_install_summary_shape(tmp_path, monkeypatch):
 def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "xdg"))
 
-    from hermes_cli import linux_desktop_entry as lde
+    from hermes_cli import desktop_cleanup as lde
 
     entry = lde.desktop_entry_path()
     entry.parent.mkdir(parents=True, exist_ok=True)
@@ -72,7 +72,7 @@ def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypa
 
     hermes_home = tmp_path / ".hermes"
     _make_agent(hermes_home)
-    icon = lde.icon_path(hermes_home / "hermes-agent")
+    icon = hermes_home / "hermes-agent" / "apps" / "desktop" / "assets" / "icon.png"
     icon.parent.mkdir(parents=True, exist_ok=True)
     icon.write_bytes(b"\x89PNG")
     monkeypatch.setattr(gu, "desktop_userdata_dir", lambda: tmp_path / "none")
@@ -83,7 +83,7 @@ def test_uninstall_removes_launcher_entry_and_refreshes_cache(tmp_path, monkeypa
     assert legacy_alias in removed and not legacy_alias.exists()
     assert refreshed == [entry.parent]
     # The icon lives in the checkout. A GUI uninstall must not delete it.
-    assert lde.icon_path(hermes_home / "hermes-agent").exists()
+    assert icon.exists()
     # The agent itself survives a GUI uninstall.
     assert (hermes_home / "hermes-agent" / "hermes_cli").is_dir()
 
@@ -112,4 +112,3 @@ def test_uninstall_args_namespace_mode_mapping():
 
     full = uninstall._UninstallArgs(mode="full")
     assert full.gui is False and full.full is True and full.yes is True
-

@@ -258,7 +258,6 @@ def _record_snapshot_stage(args, snapshot_id) -> None:
     _completion_receipt.record_stage("snapshot", "success" if snapshot_id else "skipped" if skipped else "failed")
 
 
-
 def _git_run(git_cmd, args, cwd=None, *, check=False, network=False):
     """Run git capturing utf-8 text (default cwd: checkout); ``network=True`` disables the
     terminal prompt so an HTTP 401 fails fast instead of hanging, and bounds the wait.
@@ -541,7 +540,6 @@ def _write_update_incomplete_marker() -> None:
 def _write_lazy_refresh_incomplete_marker() -> None:
     # Historical updater hook. There is no separate lazy-refresh transaction.
     stop_for_relaunch()
-
 
 
 def _filter_non_gateway_concurrent_instances(
@@ -1845,13 +1843,7 @@ def _cmd_update_impl(args, gateway_mode: bool):
     if _windows_gateway_resume:
         import atexit as _atexit
         _atexit.register(_m()._resume_windows_gateways_after_update, _windows_gateway_resume)
-    desktop_dir = _m().PROJECT_ROOT / "apps" / "desktop"
-    # An installed Hermes.app only this update refreshes counts even with no release/ build
-    # beside it: without one it was never rebuilt, so it never got newer (#52339).
-    had_desktop_app_before_update = (
-        _m()._desktop_packaged_executable(desktop_dir) is not None
-        or _m()._desktop_dist_exists(desktop_dir)
-        or bool(_m()._installed_desktop_apps()))
+    had_desktop_app_before_update = False
 
     use_zip_update, git_cmd, is_fork = _prepare_git_command(checkout_move=_moves_for(_windows_gateway_resume))
 

@@ -85,8 +85,6 @@ def test_wal_probe_unknown_never_emits_set_pragma(monkeypatch, tmp_path, caplog)
         sibling.close()
 
 
-
-
 def test_resolve_journal_mode_uses_real_database_config(monkeypatch, tmp_path):
     from hermes_state_wal import resolve_journal_mode
 
@@ -285,7 +283,6 @@ def test_real_db_openers_honor_configured_delete(monkeypatch, tmp_path):
     from hermes_cli import projects_db
     from hermes_cli import kanban_db_connect as kbc
     from hermes_state import SessionDB
-    from plugins.platforms.discord.recovery import DiscordRecoveryStore
     from tools import async_delegation
 
     observed: dict[str, str] = {}
@@ -312,10 +309,6 @@ def test_real_db_openers_honor_configured_delete(monkeypatch, tmp_path):
     finally:
         cron_conn.close()
 
-    discord = DiscordRecoveryStore(hermes_home=tmp_path)
-    observed["discord_recovery"] = discord.call(
-        lambda conn: conn.execute("PRAGMA journal_mode").fetchone()[0].lower()
-    )
 
     session_db = SessionDB(db_path=tmp_path / "state.db")
     try:
@@ -354,7 +347,6 @@ def test_real_db_openers_honor_configured_delete(monkeypatch, tmp_path):
         "delivery_ledger": "delete",
         "verification_evidence": "delete",
         "cron_executions": "delete",
-        "discord_recovery": "delete",
         "session_db": "delete",
         "kanban": "delete",
         "projects": "delete",

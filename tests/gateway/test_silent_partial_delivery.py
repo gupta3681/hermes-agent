@@ -403,38 +403,6 @@ async def test_recordless_flag_with_dead_transport_leaves_normal_send(
 # ---------------------------------------------------------------------------
 
 
-class TestDiscordTransportClassification:
-    def _adapter_module(self):
-        import plugins.platforms.discord.adapter as mod
-
-        return mod
-
-    def test_connection_error_is_transport(self):
-        mod = self._adapter_module()
-        assert mod._is_discord_transport_error(ConnectionError("websocket closed"))
-        assert mod._is_discord_transport_error(
-            RuntimeError("Session is closed")
-        )
-        assert mod._is_discord_transport_error(OSError(104, "Connection reset"))
-
-    def test_http_and_timeout_errors_are_not_transport(self):
-        mod = self._adapter_module()
-        assert not mod._is_discord_transport_error(
-            RuntimeError("error code: 50013: Missing Permissions")
-        )
-        assert not mod._is_discord_transport_error(TimeoutError())
-
-    @pytest.mark.asyncio
-    async def test_send_without_client_reports_send_path_degraded(self):
-        mod = self._adapter_module()
-        adapter = mod.DiscordAdapter.__new__(mod.DiscordAdapter)
-        adapter._client = None
-        result = await mod.DiscordAdapter.send(adapter, "c1", "hello")
-        assert result.success is False
-        assert result.error == "send_path_degraded"
-        assert result.retryable is True
-
-
 class TestLedgerReplaysDegradedDiscordSend:
     def test_reconnect_sweep_claims_degraded_discord_row(self, tmp_path, monkeypatch):
         """End-to-end ledger check: a final response rejected with

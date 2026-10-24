@@ -7,10 +7,10 @@ logger = logging.getLogger("tools.send_message_tool")
 
 # E.164 phone recipients ("+1555..."): the '+' fails the isdigit() rule and the channel directory
 # cannot resolve a raw number, so keep the '+' and treat it as explicit.
-_PHONE_PLATFORMS = frozenset({"photon", "signal", "sms", "whatsapp"})
+_PHONE_PLATFORMS = frozenset({"whatsapp", "whatsapp_cloud"})
 _E164_TARGET_RE = re.compile(r"^\s*\+(\d{7,15})\s*$")
 # Exceptions to "<PLATFORM>_HOME_CHANNEL" for error hints (email reads EMAIL_HOME_ADDRESS).
-_HOME_CHANNEL_ENV_OVERRIDES = {"email": "EMAIL_HOME_ADDRESS"}
+_HOME_CHANNEL_ENV_OVERRIDES = {}
 
 
 def _target_syntax_fn(platform_name: str):

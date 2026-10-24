@@ -84,7 +84,6 @@ jobs:
       deps: ${{ steps.gate-lanes.outputs.deps }}
       uv_lock: ${{ steps.gate-lanes.outputs.uv_lock }}
       npm_lock: ${{ steps.gate-lanes.outputs.npm_lock }}
-      desktop_updater: ${{ steps.gate-lanes.outputs.desktop_updater }}
       remote_backends: ${{ steps.gate-lanes.outputs.remote_backends }}
       catalog: ${{ steps.gate-lanes.outputs.catalog }}
       docker_meta: ${{ steps.gate-lanes.outputs.docker_meta }}
@@ -157,21 +156,15 @@ jobs:
   # macOS + Windows lanes. The main `tests` lane above is Linux-only, and
   # the OS-marked tests it collects are skipped there by design (see the
   # `_OS_MARKS` comment in tests/conftest.py) — this is where they run.
-  # Gated on `python` and on each lane it consumes: desktop_updater is set by
-  # TypeScript-only changes too (the Electron marker / result readers), and with
-  # `python` alone those never reached the Windows hand-off tests below.
+  # Gated on Python changes and the retained source-update journeys.
   tests-os:
     name: OS-specific tests
     needs: detect
-    if: needs.detect.outputs.python == 'true' || needs.detect.outputs.desktop_updater == 'true' ||
+    if: needs.detect.outputs.python == 'true' ||
       needs.detect.outputs.e2e == 'true' || needs.detect.outputs.e2e_upgrade == 'true'
     uses: ./.github/workflows/tests-os.yml
     with:
       commit: ${{ inputs.commit }}
-      # The Windows lane spawns the real desktop-update hand-off script
-      # (tests/test_desktop_update_windows_*.py) only when that surface
-      # changed; unit-level platforms("windows") tests always run.
-      desktop_updater: ${{ needs.detect.outputs.desktop_updater == 'true' }}
       e2e: ${{ needs.detect.outputs.e2e == 'true' }}
       e2e_upgrade: ${{ needs.detect.outputs.e2e_upgrade == 'true' }}
       strict_acceptance: ${{ inputs.strict_acceptance || '' }}

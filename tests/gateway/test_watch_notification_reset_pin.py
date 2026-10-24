@@ -1,6 +1,6 @@
 """A watch notice pinned to a session that ended at a user boundary (/new) is dropped, not requeued
 forever: the session authority refuses it ``admission_conflict`` on every drain tick (#141562).
-Real GatewayRunner, DiscordAdapter, SessionAuthority and drain over SQLite; no agent turn runs."""
+Real GatewayRunner, WhatsAppAdapter, SessionAuthority and drain over SQLite; no agent turn runs."""
 import asyncio
 import logging
 import queue
@@ -18,13 +18,13 @@ async def _gateway(monkeypatch):
     from gateway.run import GatewayRunner
     from gateway.session_results import execution_result
     from gateway.session_authority import SessionAuthority, initialize_session_authority
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
     adapter.gateway_runner = runner
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
 
@@ -59,7 +59,7 @@ def _notice(entry, pinned_session_id, kind='watch_match'):
     return {
         'type': kind, 'event_id': f'{kind}-1', 'session_id': 'proc_watch', 'started_at': 1.0,
         'session_key': entry.session_key, 'parent_session_id': pinned_session_id,
-        'platform': 'discord', 'chat_type': 'dm', 'chat_id': '42', 'user_id': '42',
+        'platform': 'whatsapp', 'chat_type': 'dm', 'chat_id': '42', 'user_id': '42',
         'command': 'tail -f build.log', 'pattern': 'READY', 'output': 'READY', 'suppressed': 0,
         'seq': 1, 'interval': 60, 'elapsed': 60, 'omitted': 0,
     }
@@ -108,7 +108,7 @@ async def test_notice_pinned_to_a_compression_ancestor_still_admits(monkeypatch,
     try:
         parent, child = entry.session_id, entry.session_id + '-compressed'
         runner.session_store._db_for_key(entry.session_key).publish_compression_child(
-            parent_session_id=parent, child_session_id=child, source='discord',
+            parent_session_id=parent, child_session_id=child, source='whatsapp',
             require_compression_lease=False, model='offline', model_config={},
             system_prompt='offline', messages=[{'role': 'user', 'content': 'retained'}],
         )
@@ -131,7 +131,7 @@ async def _foreign_pin(runner):
     """A live session of another chat: the authority refuses the notice, but nothing proves the pin
     gone (its owner may still appear, d6635ffe03b), so the refusal stays retryable."""
     from gateway.config import Platform
-    adapter = runner.adapters[Platform.DISCORD]
+    adapter = runner.adapters[Platform.WHATSAPP]
     other = adapter.build_source(chat_id='43', chat_type='dm', user_id='42')
     return runner.session_store.get_or_create_session(other).session_id
 

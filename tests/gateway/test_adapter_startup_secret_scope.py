@@ -28,13 +28,6 @@ from agent import secret_scope as ss
 
 # (module path, representative credential env var owned by that adapter)
 MIGRATED_ADAPTER_MODULES = [
-    ("plugins.platforms.line.adapter", "LINE_CHANNEL_ACCESS_TOKEN"),
-    ("plugins.platforms.teams.adapter", "TEAMS_CLIENT_SECRET"),
-    ("plugins.platforms.mattermost.adapter", "MATTERMOST_TOKEN"),
-    ("plugins.platforms.dingtalk.adapter", "DINGTALK_CLIENT_SECRET"),
-    ("plugins.platforms.feishu.adapter", "FEISHU_APP_SECRET"),
-    ("plugins.platforms.wecom.adapter", "WECOM_SECRET"),
-    ("plugins.platforms.buzz.adapter", "BUZZ_PRIVATE_KEY"),
     ("gateway.platforms.api_server", "API_SERVER_KEY"),
 ]
 
@@ -57,8 +50,6 @@ def _helper(module_name):
         "(Slack pattern #59739 / whatsapp_common._get_wsecret)"
     )
     return helper
-
-
 
 
 @pytest.mark.parametrize(("module_name", "var"), MIGRATED_ADAPTER_MODULES, ids=MODULE_IDS)

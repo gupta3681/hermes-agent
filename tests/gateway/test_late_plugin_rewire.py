@@ -95,22 +95,6 @@ class _PtbApp:
         self.handlers.setdefault(group, []).append(handler)
 
 
-def test_slack_late_action_handler_registers_one_listener():
-    from plugins.platforms.slack.adapter import SlackAdapter
-    adapter = SlackAdapter(PlatformConfig(enabled=True, token="xoxb-t", extra={}))
-    adapter._app = MagicMock()
-    mgr = PluginManager()
-    ctx = PluginContext(manifest=PluginManifest(name="p", version="0", description=""), manager=mgr)
-    with patch("hermes_cli.plugins.get_plugin_manager", return_value=mgr):
-        adapter._register_plugin_action_handlers()  # connect
-        async def cb(ack, body, action):
-            pass
-        ctx.register_slack_action_handler("late_btn", cb)
-        adapter.rewire_plugin_handlers()
-        adapter.rewire_plugin_handlers()
-    assert [c.args[0] for c in adapter._app.action.call_args_list] == ["late_btn"]
-
-
 def test_runner_rewires_live_adapters_on_the_loop_when_plugins_load():
     class Runner(GatewayPluginRewireMixin):
         adapters = {Platform.TELEGRAM: MagicMock()}

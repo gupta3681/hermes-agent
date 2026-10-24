@@ -18,7 +18,6 @@ from gateway.session import build_session_key
 from hermes_cli import kanban_db as kb
 from hermes_cli import kanban_db_connect as kbc
 from hermes_cli import kanban_db_notify as kbn
-from plugins.platforms.slack.adapter import SlackAdapter
 
 TEAM = "T0B8U2M6NRE"
 CHANNEL = "C0BCDG3H66P"
@@ -41,17 +40,25 @@ class UnscopedAdapter:
         event._gateway_accepted = True
 
 
+class ScopedAdapter(UnscopedAdapter):
+    """Transport double exposing the scope lookup used by the notifier."""
+    def __init__(self, channel_team=None):
+        super().__init__()
+        self.platform = Platform.SLACK
+        self.gateway_runner = None
+        self._channel_team = dict(channel_team or {})
+        self.send = AsyncMock()
+        self.handle_message = AsyncMock(side_effect=lambda event: setattr(event, "_gateway_accepted", True))
+
+    from gateway.platforms.base import BasePlatformAdapter
+    build_source = BasePlatformAdapter.build_source
+
+    def scope_id_for_chat(self, chat_id):
+        return self._channel_team.get(chat_id)
+
+
 def _slack_adapter(channel_team=None):
-    """Real SlackAdapter with only its I/O stubbed."""
-    adapter = SlackAdapter(PlatformConfig(enabled=True, token="xoxb-fake-token"))
-    adapter._app = MagicMock()
-    adapter._app.client = AsyncMock()
-    adapter._running = True
-    adapter.send = AsyncMock()
-    adapter.handle_message = AsyncMock(side_effect=lambda event: setattr(event, "_gateway_accepted", True))
-    if channel_team:
-        adapter._channel_team.update(channel_team)
-    return adapter
+    return ScopedAdapter(channel_team)
 
 
 def _runner(adapter, platform=Platform.SLACK):
@@ -196,8 +203,7 @@ def test_unscoped_platform_wake_key_is_byte_identical(tmp_path, monkeypatch):
 
 def test_wake_scope_id_prefers_persisted_metadata_over_the_adapter_map():
     """Persisted metadata wins; the adapter map is only a fallback."""
-    adapter = SlackAdapter.__new__(SlackAdapter)
-    adapter._channel_team = {CHANNEL: "T_STALE"}
+    adapter = ScopedAdapter({CHANNEL: "T_STALE"})
 
     assert _wake_scope_id(
         adapter, {"chat_id": CHANNEL, "delivery_metadata": {"slack_team_id": TEAM}}
@@ -212,16 +218,3 @@ def test_wake_scope_id_degrades_when_the_adapter_lookup_raises():
             raise RuntimeError("adapter state gone")
 
     assert _wake_scope_id(Exploding(), {"chat_id": CHANNEL}) is None
-
-
-
-
-
-
-def test_slack_adapter_reports_no_scope_for_ambiguous_channels():
-    """A channel claimed by two workspaces resolves to no scope."""
-    adapter = _slack_adapter()
-    adapter._remember_channel_team("D_SHARED", "T_ONE")
-    adapter._remember_channel_team("D_SHARED", "T_TWO")
-
-    assert adapter.scope_id_for_chat("D_SHARED") is None

@@ -1,8 +1,9 @@
 # Jarvis — WhatsApp-focused Hermes fork
 
 This checkout reuses Hermes's agent loop, tools, memory, skills, scheduling, and WhatsApp
-transports. The desktop, bootstrap installer, Ink TUI, browser dashboard frontend, and docs
-website build have been removed. The classic CLI and shared server infrastructure remain.
+transports. WhatsApp and WhatsApp Cloud are the only bundled chat adapters. The desktop,
+bootstrap installer, Ink TUI, browser dashboard frontend, and docs website build are removed.
+The classic CLI, API/webhooks, and shared server infrastructure remain.
 
 Start with [AGENTS.md](AGENTS.md), [our tests](docs/jarvis/TESTING.md), and
 [the removal record](docs/jarvis/PRUNING.md). This is an early fork, not yet a hosted

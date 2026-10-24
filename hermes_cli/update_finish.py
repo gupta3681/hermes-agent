@@ -128,15 +128,7 @@ def main(context: Path, result: Path) -> int:
                     code = 2
                     return code
                 resume = _resume_windows_gateways_after_update
-                desktop = request.get("desktop")
-                if desktop is None:
-                    # Historical hooks can precede Desktop detection. Resolve
-                    # only that unknown state, in the freshly bootstrapped app.
-                    from hermes_cli.main_desktop import _desktop_dist_exists, _desktop_packaged_executable
-
-                    desktop_dir = root / "apps" / "desktop"
-                    desktop = (_desktop_packaged_executable(desktop_dir) is not None
-                               or _desktop_dist_exists(desktop_dir))
+                desktop = False
                 # The tail is owed from here until it finishes: a failure or a kill leaves the
                 # pending marker, so the next launch finishes it (same as the current completion).
                 try:

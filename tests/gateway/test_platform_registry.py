@@ -19,10 +19,10 @@ class TestPlatformEnumDynamic:
 
     def test_dynamic_member_case_normalised(self):
         """Mixed case normalised to lowercase."""
-        a = Platform("A2A")
-        b = Platform("a2a")
+        a = Platform("WHATSAPP")
+        b = Platform("whatsapp")
         assert a is b
-        assert a.value == "a2a"
+        assert a.value == "whatsapp"
 
     def test_dynamic_member_with_hyphens(self):
         """Registered plugin platforms with hyphens work once registered."""
@@ -51,10 +51,10 @@ class TestPlatformEnumDynamic:
         gc._Platform__bundled_plugin_names = None  # force a rescan of plugins/platforms/
         gc._Platform__bundled_plugin_aliases = None
         try:
-            by_dir = Platform("a2a")
-            by_manifest = Platform("a2a-platform")
+            by_dir = Platform("whatsapp")
+            by_manifest = Platform("whatsapp-platform")
             assert by_manifest is by_dir
-            assert by_manifest.value == "a2a"
+            assert by_manifest.value == "whatsapp"
         finally:
             gc._Platform__bundled_plugin_names = None
             gc._Platform__bundled_plugin_aliases = None
@@ -66,9 +66,9 @@ class TestPlatformEnumDynamic:
         gc._Platform__bundled_plugin_names = None
         gc._Platform__bundled_plugin_aliases = None
         try:
-            config = GatewayConfig.from_dict({"platforms": {"a2a-platform": {"enabled": True}}})
-            assert Platform("a2a") in config.platforms
-            assert config.platforms[Platform("a2a")].enabled is True
+            config = GatewayConfig.from_dict({"platforms": {"whatsapp-platform": {"enabled": True}}})
+            assert Platform("whatsapp") in config.platforms
+            assert config.platforms[Platform("whatsapp")].enabled is True
         finally:
             gc._Platform__bundled_plugin_names = None
             gc._Platform__bundled_plugin_aliases = None
@@ -78,7 +78,7 @@ class TestPlatformEnumDynamic:
         import gateway.config as gc
 
         names, aliases = gc.Platform._scan_bundled_plugin_platforms()
-        assert "a2a" in names
+        assert "whatsapp" in names
         assert set(aliases.values()) <= names
         assert not (set(aliases) & names)
 
@@ -632,45 +632,6 @@ class TestPluginEnablementGate:
                 assert cfg.platforms[plat].enabled is False
         finally:
             _reg.unregister("myhardblockplat")
-
-
-class TestMigratedPlatformWiring:
-    """Every lazy-installable bundled platform must register the split:
-    a PASSIVE check_fn plus an ACTIVE ensure_deps_fn (#79812).
-
-    Behavior contract, not a snapshot: asserts the two fields are distinct
-    callables (probe != installer), not specific function identities, so
-    renames don't churn this test. One discovery pass covers every platform.
-    """
-
-    _LAZY_INSTALLABLE = (
-        "teams", "discord", "slack",
-        "matrix", "dingtalk", "feishu", "wecom_callback",
-        "google_chat",
-    )
-
-    def test_lazy_installable_platforms_have_split_wiring(self):
-        from hermes_cli.plugins import discover_plugins
-
-        discover_plugins()
-        from gateway.platform_registry import platform_registry
-
-        # Materialize deferred loaders (wecom_callback is registered by the
-        # "wecom" manifest's loader; a cold get() by its own name misses).
-        platform_registry.plugin_entries()
-        for platform_name in self._LAZY_INSTALLABLE:
-            entry = platform_registry.get(platform_name)
-            assert entry is not None, f"{platform_name} not registered"
-            assert entry.ensure_deps_fn is not None, (
-                f"{platform_name} has a lazy-installable SDK but no "
-                "ensure_deps_fn — its deps can never auto-install "
-                "(the #79812 deadlock)"
-            )
-            assert entry.ensure_deps_fn is not entry.check_fn, (
-                f"{platform_name} registered the same callable for the passive "
-                "probe and the active installer — status displays would "
-                "pip-install as a side effect"
-            )
 
 
 @pytest.mark.parametrize("timeout, nested_sees_sibling", [(0.5, False), (0, True)])

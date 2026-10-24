@@ -119,7 +119,6 @@ async def forward(connection, params):
         # titled row never proves it belongs to this exact conversation. Never adopt or retitle
         # it (that would hand one peer another's history), and never refuse every peer whose
         # slug collides: start this identity's own canonical session and leave the old row be.
-        from plugins.platforms.a2a.adapter import _safe_context_slug
         title = f'a2a-{params["agent"]}-{_safe_context_slug(params["context_id"])}'
         legacy = authority.db.get_session_by_title(title)
         if legacy is not None:
@@ -188,3 +187,10 @@ async def _completion(client, admission_id):
         frame = event.get('params') or {}
         if frame.get('type') == 'message.complete' and (frame.get('payload') or {}).get('admission_id') == admission_id:
             return
+
+
+def _safe_context_slug(value: str, max_len: int = 96) -> str:
+    """Sanitize untrusted context IDs before using them in historical session titles."""
+    import re
+    slug = re.sub(r"[^A-Za-z0-9_.-]+", "-", str(value or "")).strip("-._")
+    return (slug or "ctx")[:max_len]

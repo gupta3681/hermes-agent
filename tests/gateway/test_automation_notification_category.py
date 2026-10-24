@@ -118,13 +118,13 @@ async def test_display_kind_is_a_closed_producer_set(tmp_path, monkeypatch):
 async def test_native_automation_category_roundtrip(tmp_path, monkeypatch, category):
     from gateway.session_ingress_context import native_callback, register_transport_home
     from gateway.session_envelope import restore_native
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     runner, authority = await _authority(tmp_path, monkeypatch)
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     runner._wire_adapter_handlers(adapter)
     register_transport_home(runner, None, tmp_path)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
     human = MessageEvent(text='human', source=source, message_id='human')
     try:
@@ -159,13 +159,13 @@ _SOURCE = dict(chat_id='42', chat_type='dm', user_id='42', user_name='human')
 
 async def _native_owner(tmp_path, monkeypatch, human_message_id):
     from gateway.session_ingress_context import native_callback, register_transport_home
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     runner, authority = await _authority(tmp_path, monkeypatch)
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     runner._wire_adapter_handlers(adapter)
     register_transport_home(runner, None, tmp_path)
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     source = adapter.build_source(**_SOURCE)
     # The committed human turn keeps its platform reply anchor on the source.
     human = MessageEvent(text='human', source=adapter.build_source(**_SOURCE, message_id=human_message_id),
@@ -216,10 +216,10 @@ async def test_native_completion_wake_refuses_other_source_drift(tmp_path, monke
 
 @pytest.mark.asyncio
 async def test_native_completion_wake_refuses_another_adapter(tmp_path, monkeypatch):
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     _runner, authority, _adapter, source, metadata = await _native_owner(tmp_path, monkeypatch, 'human-1')
     try:
-        stranger = DiscordAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
+        stranger = WhatsAppAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
         event = MessageEvent(text='notice', source=source, internal=True, metadata=dict(metadata))
         with pytest.raises(RuntimeStoreError, match='admission_conflict'):
             await authority.admit_automation(stranger, event, 'notice')
@@ -238,7 +238,7 @@ async def test_refused_watch_wake_logs_the_refusal_code(tmp_path, monkeypatch, c
         route = metadata['gateway_session_key']
         # Point the routing entry at a renamed user: the wake's source no longer matches the commit.
         runner.session_store._entries[route].origin = replace_source(source, user_name='renamed')
-        evt = {'type': 'completion', 'session_id': 'proc_x', 'session_key': route, 'platform': 'discord',
+        evt = {'type': 'completion', 'session_id': 'proc_x', 'session_key': route, 'platform': 'whatsapp',
                'chat_id': '42', 'chat_type': 'dm', 'exit_code': 0, 'output': 'done', 'started_at': 1.0,
                'parent_session_id': metadata['gateway_session_id']}
         with caplog.at_level(logging.WARNING, logger='gateway.run'):
@@ -246,6 +246,6 @@ async def test_refused_watch_wake_logs_the_refusal_code(tmp_path, monkeypatch, c
                 await runner._inject_watch_notification('[done]', evt, raise_not_accepted=True)
         assert [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING
                 and 'not admitted' in r.getMessage()] == [
-            'Watch notification not admitted for discord chat=42: admission_conflict']
+            'Watch notification not admitted for whatsapp chat=42: admission_conflict']
     finally:
         authority.db.close()

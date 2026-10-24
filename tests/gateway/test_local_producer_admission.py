@@ -217,16 +217,16 @@ async def messaging(tmp_path, monkeypatch):
     from gateway.session_authority import SessionAuthority, initialize_session_authority
     from gateway.session_ingress_context import native_callback, register_transport_home
     from hermes_state import SessionDB
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
     monkeypatch.setenv('HERMES_HOME', str(tmp_path))
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     monkeypatch.setattr(SessionAuthority, '_schedule', lambda self, ref: None)
     runner = GatewayRunner(GatewayConfig(sessions_dir=tmp_path / 'sessions'))
     db = SessionDB(tmp_path / 'state.db')
     runner.session_store._db = runner._session_db = db
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='ticks', db=db)
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
-    runner.adapters = {Platform.DISCORD: adapter}
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='***', typing_indicator=False))
+    runner.adapters = {Platform.WHATSAPP: adapter}
     runner._wire_adapter_handlers(adapter)
     register_transport_home(runner, None, tmp_path)
     chat = dict(chat_id='42', chat_type='dm', user_id='42', user_name='human')
@@ -238,7 +238,7 @@ async def messaging(tmp_path, monkeypatch):
     try:
         yield SimpleNamespace(runner=runner, authority=authority, route=route, owner=owner, event=lambda kind, **fields: {
             'type': kind, 'session_id': 'proc_job', 'started_at': 1.0, 'session_key': route, 'parent_session_id': owner,
-            'platform': 'discord', 'command': 'make test', **chat, **fields})
+            'platform': 'whatsapp', 'command': 'make test', **chat, **fields})
     finally:
         db.close()
 

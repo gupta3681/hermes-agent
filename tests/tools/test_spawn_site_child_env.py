@@ -8,7 +8,10 @@ from unittest.mock import patch
 
 import pytest
 
-from tests.tools._child_env_fixtures import child_env
+from tests.tools import _child_env_fixtures
+
+child_env = _child_env_fixtures.child_env
+
 
 _TIER1 = ("TELEGRAM_BOT_TOKEN", "GATEWAY_RELAY_SECRET")
 _PROVIDER = "OPENAI_API_KEY"
@@ -51,7 +54,7 @@ def test_compute_host_is_hermes_and_keeps_its_full_environment(child_env, monkey
 
 
 @pytest.mark.platforms("posix")  # the stand-in binaries are shebang scripts
-@pytest.mark.parametrize("site", ["lsp_server", "lsp_go_install", "lsp_npm_install", "buzz_cli"])
+@pytest.mark.parametrize("site", ["lsp_server", "lsp_go_install", "lsp_npm_install"])
 def test_third_party_children_never_see_hermes_credentials(child_env, monkeypatch, site):
     _plant(monkeypatch)
     # Profile home mode (the container default) re-points HOME; the CLIs whose own logins live
@@ -84,11 +87,6 @@ def test_third_party_children_never_see_hermes_credentials(child_env, monkeypatc
 
         with patch.object(install, "find_node_executable", return_value=str(probe)):
             install._install_npm("probe-language-server", "probe")
-    elif site == "buzz_cli":
-        from plugins.platforms.buzz.adapter import _exec_buzz
-
-        asyncio.run(_exec_buzz(str(probe), [], relay_url="wss://relay.invalid", private_key="buzz-own"))
-
     seen = json.loads(out.read_text(encoding="utf-8-sig"))
     assert {k: seen[k] for k in (*_TIER1, _PROVIDER)} == dict.fromkeys((*_TIER1, _PROVIDER))
     assert seen[own]  # the child's own configuration still arrives

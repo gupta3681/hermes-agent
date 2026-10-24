@@ -4,7 +4,7 @@ Main's busy handler queued every internal synthetic event (Kanban wakes, /loop t
 notifications) behind the running turn. Under the session authority a busy adapter hands every
 non-command to ``dispatch_shared_busy``; the authority declines internal input, so the wake fell
 through to the classic busy path, which in the default ``interrupt`` mode ended the user's turn.
-Real GatewayRunner, DiscordAdapter, SessionAuthority and drain over SQLite; the user turn is a
+Real GatewayRunner, WhatsAppAdapter, SessionAuthority and drain over SQLite; the user turn is a
 stand-in holding a real running-agent slot.
 """
 import asyncio
@@ -24,11 +24,11 @@ async def test_kanban_wake_during_an_admitted_turn_queues_without_interrupting(m
     from gateway.session_results import execution_result
     from gateway.wake import deliver_wake
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
     sent = []
 
     async def send(chat_id, content, reply_to=None, metadata=None):
@@ -36,7 +36,7 @@ async def test_kanban_wake_during_an_admitted_turn_queues_without_interrupting(m
         return SendResult(success=True, message_id=f's{len(sent)}')
     monkeypatch.setattr(adapter, 'send', send)
     adapter.gateway_runner = runner  # as GatewayRunner._create_adapter binds every adapter
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
@@ -94,18 +94,18 @@ async def test_idle_loop_tick_runs_as_a_fifo_turn_not_beside_it(monkeypatch):
     from gateway.session_results import execution_result
     from hermes_cli import loops
     from hermes_state_runtime import list_session_admissions
-    from plugins.platforms.discord.adapter import DiscordAdapter
+    from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
-    monkeypatch.setenv('DISCORD_ALLOWED_USERS', '42')
+    monkeypatch.setenv('WHATSAPP_ALLOWED_USERS', '42')
     runner = GatewayRunner(GatewayConfig())
-    adapter = DiscordAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token='fixture-token', typing_indicator=False))
     adapter.gateway_runner = runner
 
     async def send(chat_id, content, reply_to=None, metadata=None):
         from gateway.platforms.base import SendResult
         return SendResult(success=True, message_id='sent')
     monkeypatch.setattr(adapter, 'send', send)
-    runner.adapters = {Platform.DISCORD: adapter}
+    runner.adapters = {Platform.WHATSAPP: adapter}
     authority = await initialize_session_authority(runner, profile_id='default', instance_id='owner')
     runner._wire_adapter_handlers(adapter)
     source = adapter.build_source(chat_id='42', chat_type='dm', user_id='42')
@@ -144,7 +144,7 @@ async def test_idle_loop_tick_runs_as_a_fifo_turn_not_beside_it(monkeypatch):
             raise AssertionError('the tick was not admitted')
     monkeypatch.setattr(loops, 'LoopManager', Loop)
     monkeypatch.setattr(loops, 'goal_blocks_loop_tick', lambda sid: False)
-    route = {'platform': 'discord', 'chat_id': '42', 'chat_type': 'dm', 'user_id': '42'}
+    route = {'platform': 'whatsapp', 'chat_id': '42', 'chat_type': 'dm', 'user_id': '42'}
     await runner._loop_wakeup_fire_one(owner, SimpleNamespace(awaiting_response=False, next_due_at=0, route=route),
                                        1e12, set())
     await async_wait_until(lambda: len(started) >= 2, what='the loop tick turn to start')
