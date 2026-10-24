@@ -15,13 +15,8 @@ from hermes_cli import kanban_db_connect as kbc
 from hermes_cli import kanban_db_notify as kbn
 
 
-def setup_route(raft=False):
-    if raft:
-        from plugins.platforms.raft.adapter import RaftAdapter
-        adapter = RaftAdapter(PlatformConfig(enabled=True, typing_indicator=False,
-            extra={"bridge_token": "owned-test-token", "port": 0}))
-    else:
-        adapter = WireAdapter(PlatformConfig(enabled=True, typing_indicator=False), Platform.TELEGRAM)
+def setup_route(platform=Platform.TELEGRAM):
+    adapter = WireAdapter(PlatformConfig(enabled=True, typing_indicator=False), platform)
     adapter.wire = []
     runner = object.__new__(GatewayRunner)
     runner._running_agents = {}
@@ -42,11 +37,9 @@ async def drain(adapter):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("raft", [False, True])
-async def test_push_receipt_requires_real_admission_without_displacing_user(raft, monkeypatch):
-    runner, adapter, source, key = setup_route(raft)
-    if raft:
-        monkeypatch.setattr(adapter, "_spawn_bridge", lambda port: None)
+@pytest.mark.parametrize("platform", [Platform.WHATSAPP, Platform.TELEGRAM])
+async def test_push_receipt_requires_real_admission_without_displacing_user(platform):
+    runner, adapter, source, key = setup_route(platform)
     release, started = asyncio.Event(), asyncio.Event()
     received = []
 

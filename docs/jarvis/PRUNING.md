@@ -95,3 +95,25 @@ and profile tests, private credential writers, Node resolution, registry, queue,
 send-error redaction tests. All 12 repository checks passed, with Ruff rerun after the
 final test edit. Container image execution remains unverified because no local Docker
 daemon is available.
+
+## Third pass: Raft and dashboard achievements
+
+Removed the Raft channel bridge and the standalone achievements dashboard plugin,
+including its compiled frontend, screenshots, and dedicated tests. Neither is used by
+Jarvis's WhatsApp path. Shared child-process credential-scrubbing coverage remains for
+language servers/installers and Buzz. The wake/admission test now exercises the same
+shared lifecycle under WhatsApp and Telegram platform identities rather than Raft.
+Plugin API authorization still verifies the retained Kanban routes and arbitrary plugin
+namespaces before route discovery.
+
+The next large candidates are the legacy desktop release/bundling helpers. They cannot
+be removed as one directory: `pm.cli` imports native staging, the container's shared
+assembler imports link handling from `scripts.bundles.payload`, and the source updater
+imports release-version handling. Their useful primitives need to be separated from
+retired distribution commands first. The updater's upstream release assumptions also
+need an explicit Jarvis release policy before we change them.
+
+Third-pass verification: all 255 affected tests passed across seven files, including the
+complete backend web-server suite, shared wake/admission, child-process credential
+scrubbing, plugin setup, registry, and the Jarvis contracts. All 12 repository checks
+passed. No container image or production service was changed.

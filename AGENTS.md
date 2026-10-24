@@ -99,4 +99,5 @@ has shipped. `docs/jarvis/TESTING.md` separates verified contracts from pending 
 Desktop, bootstrap installer, Ink terminal UI, browser dashboard frontend, and the docs-site
 build are removed. Reference docs remain under `website/docs/`. Do not restore these surfaces
 as an automatic repair. IRC, ntfy, SimpleX, BlueBubbles, SMS/Twilio, and Photon iMessage
-adapters are also removed. See `docs/jarvis/PRUNING.md` for retained dependencies and verification.
+adapters are also removed, along with Raft and the achievements dashboard plugin.
+See `docs/jarvis/PRUNING.md` for retained dependencies and verification.
