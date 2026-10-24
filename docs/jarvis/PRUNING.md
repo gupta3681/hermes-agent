@@ -145,3 +145,16 @@ offline wheelhouse rebuilding. Nine new source-admission cases passed. Both reta
 workspaces passed their checks (88 tests), and all 12 repository guards passed; Ruff was
 rerun after the final test annotation. Shell syntax and the new native-builder CLI were
 also checked. Docker image execution remains unverified because the local daemon is down.
+
+### Docker verification after starting the daemon
+
+The Linux arm64 image now builds successfully as `jarvis-smoke:headless`. The build
+exposed two remaining Dockerfile references to `scripts.bundles.payload`; both now
+use `scripts.build.payload`. The payload test checks the retained TypeScript runtime
+compiler and absence of removed frontend products instead of expecting dashboard icons.
+
+All 14 container tests passed across image payload, SQLite, startup smoke, main invocation,
+immutable-install permissions, and runtime UID/volume initialization. These exercise the
+real entrypoint, non-root imports, SQLite FTS5 trigram support, writable runtime state,
+and protected application files. All 12 repository checks passed. This verifies the local
+arm64 image; other architectures and production deployment were not exercised.

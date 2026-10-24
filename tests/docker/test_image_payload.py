@@ -29,14 +29,12 @@ print('PM interpreter and application dependencies load as hermes')
     assert result.returncode == 0, result.stdout + result.stderr
 
 
-def test_dashboard_ships_generated_icon_without_build_environment(built_image: str) -> None:
+def test_headless_image_keeps_runtime_compiler_without_frontend_products(built_image: str) -> None:
     probe = """
 from pathlib import Path
-from PIL import Image
-
-with Image.open('/opt/hermes/hermes_cli/web_dist/favicon.ico') as image:
-    image.load()
-    assert image.width > 0 and image.height > 0
+assert not Path('/opt/hermes/hermes_cli/web_dist/index.html').exists()
+assert not Path('/opt/hermes/ui-tui/dist/entry.js').exists()
+assert not Path('/opt/hermes/apps/desktop/package.json').exists()
 assert not Path('/opt/hermes/node_modules/vite').exists()
 assert not Path('/opt/hermes/node_modules/esbuild').exists()
 assert Path('/opt/hermes/node_modules/typescript/bin/tsc').is_file()
