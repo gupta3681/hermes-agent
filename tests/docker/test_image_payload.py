@@ -32,6 +32,8 @@ print('PM interpreter and application dependencies load as hermes')
 def test_headless_image_keeps_runtime_compiler_without_frontend_products(built_image: str) -> None:
     probe = """
 from pathlib import Path
+from importlib.util import find_spec
+assert find_spec('telegram') is None
 assert not Path('/opt/hermes/hermes_cli/web_dist/index.html').exists()
 assert not Path('/opt/hermes/ui-tui/dist/entry.js').exists()
 assert not Path('/opt/hermes/apps/desktop/package.json').exists()

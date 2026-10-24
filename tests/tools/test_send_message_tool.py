@@ -2,19 +2,11 @@
 
 import asyncio
 import json
-import os
 import sys
 from types import ModuleType, SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-
-# python-telegram-bot is an optional dep — skip the entire module when
-# it isn't installed (e.g. CI bare env). Tests that patch telegram.Bot
-# or call _send_telegram need it; tests for other platforms don't but
-# keeping the whole file consistent is simpler.
-_HAS_TELEGRAM = pytest.importorskip("telegram", reason="python-telegram-bot not installed") is not None
-
 
 @pytest.fixture(autouse=True)
 def _reset_signal_scheduler():
@@ -29,7 +21,6 @@ from gateway.config import Platform
 from tools.send_message_tool import (
     _resolve_slack_user_target,
     _send_matrix_via_adapter,
-    _send_telegram,
     _send_to_platform,
     send_message_tool,
 )
@@ -231,22 +222,11 @@ def _run_async_immediately(coro):
 
 
 def _make_config():
-    telegram_cfg = SimpleNamespace(enabled=True, token="***", extra={})
+    whatsapp_cfg = SimpleNamespace(enabled=True, token="***", extra={})
     return SimpleNamespace(
-        platforms={Platform.TELEGRAM: telegram_cfg},
+        platforms={Platform.WHATSAPP: whatsapp_cfg},
         get_home_channel=lambda _platform: None,
-    ), telegram_cfg
-
-
-def _install_telegram_mock(monkeypatch, bot):
-    parse_mode = SimpleNamespace(MARKDOWN_V2="MarkdownV2", HTML="HTML")
-    constants_mod = SimpleNamespace(ParseMode=parse_mode)
-    # MessageEntity needed by #27865 mention-detection path; tests don't
-    # inspect it but the import must succeed.
-    _MessageEntity = lambda **_kw: SimpleNamespace(**_kw)
-    telegram_mod = SimpleNamespace(Bot=lambda token: bot, MessageEntity=_MessageEntity, constants=constants_mod)
-    monkeypatch.setitem(sys.modules, "telegram", telegram_mod)
-    monkeypatch.setitem(sys.modules, "telegram.constants", constants_mod)
+    ), whatsapp_cfg
 
 
 def _ensure_slack_mock(monkeypatch):
@@ -274,47 +254,6 @@ def _ensure_slack_mock(monkeypatch):
 
 
 class TestSendMessageTool:
-    def test_ntfy_topic_target_is_explicit(self):
-        chat_id, thread_id, is_explicit = _parse_target_ref("ntfy", "alerts-channel")
-
-        assert chat_id == "alerts-channel"
-        assert thread_id is None
-        assert is_explicit is True
-
-    def test_ntfy_topic_target_bypasses_channel_directory(self):
-        ntfy_platform = Platform("ntfy")
-        ntfy_cfg = SimpleNamespace(enabled=True, token=None, extra={"topic": "hermes-in"})
-        config = SimpleNamespace(
-            platforms={ntfy_platform: ntfy_cfg},
-            get_home_channel=lambda _platform: None,
-        )
-
-        with patch("gateway.config.load_gateway_config", return_value=config), \
-             patch("tools.interrupt.is_interrupted", return_value=False), \
-             patch("gateway.channel_directory.resolve_channel_name", side_effect=AssertionError("should not resolve ntfy topics")), \
-             patch("model_tools._run_async", side_effect=_run_async_immediately), \
-             patch("tools.send_message_tool._send_to_platform", new=AsyncMock(return_value={"success": True})) as send_mock, \
-             patch("gateway.mirror.mirror_to_session", return_value=True):
-            result = json.loads(
-                send_message_tool(
-                    {
-                        "action": "send",
-                        "target": "ntfy:alerts-channel",
-                        "message": "done",
-                    }
-                )
-            )
-
-        assert result["success"] is True
-        send_mock.assert_awaited_once_with(
-            ntfy_platform,
-            ntfy_cfg,
-            "alerts-channel",
-            "done",
-            thread_id=None,
-            media_files=[],
-            force_document=False,
-        )
 
 
     def test_media_tag_outside_allowed_roots_is_not_sent(self, tmp_path, monkeypatch):
@@ -325,7 +264,7 @@ class TestSendMessageTool:
         # in 2026-05; this test pins strict on explicitly.)
         monkeypatch.setenv("HERMES_MEDIA_DELIVERY_STRICT", "1")
         monkeypatch.setenv("HERMES_MEDIA_TRUST_RECENT_FILES", "0")
-        config, telegram_cfg = _make_config()
+        config, whatsapp_cfg = _make_config()
         secret = tmp_path / "secret.pdf"
         secret.write_bytes(b"%PDF secret")
 
@@ -338,7 +277,7 @@ class TestSendMessageTool:
                 send_message_tool(
                     {
                         "action": "send",
-                        "target": "telegram:12345",
+                        "target": "whatsapp:12345",
                         "message": f"hello\nMEDIA:{secret}",
                     }
                 )
@@ -349,8 +288,8 @@ class TestSendMessageTool:
         assert result["partial_success"] is True
         assert result["media_dropped"] == [{"path": str(secret), "reason": "denied by the delivery policy"}]
         send_mock.assert_awaited_once_with(
-            Platform.TELEGRAM,
-            telegram_cfg,
+            Platform.WHATSAPP,
+            whatsapp_cfg,
             "12345",
             "hello",
             thread_id=None,
@@ -365,7 +304,7 @@ class TestSendMessageTool:
         from hermes_cli.send_cmd import _emit_result
 
         monkeypatch.setenv("HERMES_MEDIA_DELIVERY_STRICT", "0")
-        config, telegram_cfg = _make_config()
+        config, whatsapp_cfg = _make_config()
         report = tmp_path / "report.pdf"
         report.write_bytes(b"%PDF report")
         missing = tmp_path / "missing.pdf"
@@ -377,7 +316,7 @@ class TestSendMessageTool:
              patch("gateway.mirror.mirror_to_session", return_value=True):
             raw = send_message_tool({
                 "action": "send",
-                "target": "telegram:12345",
+                "target": "whatsapp:12345",
                 "message": f"report\nMEDIA:{report}\nMEDIA:{missing}",
             })
 
@@ -387,13 +326,13 @@ class TestSendMessageTool:
         assert result["media_dropped"] == [{"path": str(missing), "reason": "not found on this host"}]
         assert result["error"]
         send_mock.assert_awaited_once_with(
-            Platform.TELEGRAM, telegram_cfg, "12345", "report", thread_id=None,
+            Platform.WHATSAPP, whatsapp_cfg, "12345", "report", thread_id=None,
             media_files=[(str(report.resolve()), False)], force_document=False,
         )
         assert _emit_result(raw, json_mode=True, quiet=True) != 0
 
     def test_top_level_send_failure_redacts_query_token(self):
-        config, _telegram_cfg = _make_config()
+        config, _whatsapp_cfg = _make_config()
         leaked = "very-secret-query-token-123456"
 
         def _raise_and_close(coro):
@@ -409,7 +348,7 @@ class TestSendMessageTool:
                 send_message_tool(
                     {
                         "action": "send",
-                        "target": "telegram:-1001",
+                        "target": "whatsapp:-1001",
                         "message": "hello",
                     }
                 )
@@ -418,88 +357,6 @@ class TestSendMessageTool:
         assert "error" in result
         assert leaked not in result["error"]
         assert "access_token=***" in result["error"]
-
-
-class TestSendTelegramMediaDelivery:
-    def test_sends_photo_with_caption_for_media_tag(self, tmp_path, monkeypatch):
-        # A single captionable image + short text now rides as the photo's
-        # native caption (MEDIA:<path> caption), not a separate text message.
-        image_path = tmp_path / "photo.png"
-        image_path.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 32)
-
-        bot = MagicMock()
-        bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=1))
-        bot.send_photo = AsyncMock(return_value=SimpleNamespace(message_id=2))
-        bot.send_video = AsyncMock()
-        bot.send_voice = AsyncMock()
-        bot.send_audio = AsyncMock()
-        bot.send_document = AsyncMock()
-        _install_telegram_mock(monkeypatch, bot)
-
-        result = asyncio.run(
-            _send_telegram(
-                "token",
-                "12345",
-                "Hello there",
-                media_files=[(str(image_path), False)],
-            )
-        )
-
-        assert result["success"] is True
-        assert result["message_id"] == "2"
-        # No separate text send — the caption rides the photo bubble.
-        bot.send_message.assert_not_awaited()
-        bot.send_photo.assert_awaited_once()
-        assert bot.send_photo.await_args.kwargs.get("caption") == "Hello there"
-
-    def test_sends_voice_for_ogg_with_voice_directive(self, tmp_path, monkeypatch):
-        voice_path = tmp_path / "voice.ogg"
-        voice_path.write_bytes(b"OggS" + b"\x00" * 32)
-
-        bot = MagicMock()
-        bot.send_message = AsyncMock()
-        bot.send_photo = AsyncMock()
-        bot.send_video = AsyncMock()
-        bot.send_voice = AsyncMock(return_value=SimpleNamespace(message_id=7))
-        bot.send_audio = AsyncMock()
-        bot.send_document = AsyncMock()
-        _install_telegram_mock(monkeypatch, bot)
-
-        result = asyncio.run(
-            _send_telegram(
-                "token",
-                "12345",
-                "",
-                media_files=[(str(voice_path), True)],
-            )
-        )
-
-        assert result["success"] is True
-        bot.send_voice.assert_awaited_once()
-        bot.send_audio.assert_not_awaited()
-        bot.send_message.assert_not_awaited()
-
-    def test_missing_media_returns_error_without_leaking_raw_tag(self, monkeypatch):
-        bot = MagicMock()
-        bot.send_message = AsyncMock()
-        bot.send_photo = AsyncMock()
-        bot.send_video = AsyncMock()
-        bot.send_voice = AsyncMock()
-        bot.send_audio = AsyncMock()
-        bot.send_document = AsyncMock()
-        _install_telegram_mock(monkeypatch, bot)
-
-        result = asyncio.run(
-            _send_telegram(
-                "token",
-                "12345",
-                "",
-                media_files=[("/tmp/does-not-exist.png", False)],
-            )
-        )
-
-        assert "error" in result
-        bot.send_message.assert_not_awaited()
 
 
 # ---------------------------------------------------------------------------
@@ -584,48 +441,6 @@ class TestSendToPlatformChunking:
         assert "&amp;amp;" not in sent_text
         assert "&amp;lt;" not in sent_text
         assert "AT&amp;T" in sent_text
-
-    def test_telegram_markdown_expansion_is_chunked_before_send(self, monkeypatch):
-        """Telegram chunking must account for MarkdownV2 escaping expansion.
-
-        A raw message under 4096 UTF-16 units can inflate past the limit once
-        MarkdownV2-escaped (each `!`/`.`/`-` becomes `\\!`/`\\.`/`\\-`). The
-        send path must chunk the *formatted* text so no single send exceeds
-        4096 (issue #28557).
-        """
-        from gateway.platforms.base import utf16_len
-
-        send_lengths = []
-
-        async def fake_send_message(**kwargs):
-            text = kwargs["text"]
-            send_lengths.append(utf16_len(text))
-            if utf16_len(text) > 4096:
-                raise Exception("Message is too long")
-            return SimpleNamespace(message_id=len(send_lengths))
-
-        bot = MagicMock()
-        bot.send_message = AsyncMock(side_effect=fake_send_message)
-        bot.send_photo = AsyncMock()
-        bot.send_video = AsyncMock()
-        bot.send_voice = AsyncMock()
-        bot.send_audio = AsyncMock()
-        bot.send_document = AsyncMock()
-        _install_telegram_mock(monkeypatch, bot)
-
-        result = asyncio.run(
-            _send_to_platform(
-                Platform.TELEGRAM,
-                SimpleNamespace(enabled=True, token="tok", extra={}),
-                "123",
-                "!" * 4096,  # raw 4096 -> ~8192 after MarkdownV2 escaping
-            )
-        )
-
-        assert result["success"] is True
-        assert bot.send_message.await_count >= 2
-        assert max(send_lengths) <= 4096
-
 
 
 class TestMatrixMediaLiveAdapterReuse:
@@ -729,145 +544,6 @@ class TestMatrixMediaLiveAdapterReuse:
 # ---------------------------------------------------------------------------
 # HTML auto-detection in Telegram send
 # ---------------------------------------------------------------------------
-
-
-
-
-class TestSendTelegramHtmlDetection:
-    """Verify that messages containing HTML tags are sent with parse_mode=HTML
-    and that plain / markdown messages use MarkdownV2."""
-
-    def _make_bot(self):
-        bot = MagicMock()
-        bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=1))
-        bot.send_photo = AsyncMock()
-        bot.send_video = AsyncMock()
-        bot.send_voice = AsyncMock()
-        bot.send_audio = AsyncMock()
-        bot.send_document = AsyncMock()
-        return bot
-
-    def test_html_message_uses_html_parse_mode(self, monkeypatch):
-        bot = self._make_bot()
-        _install_telegram_mock(monkeypatch, bot)
-
-        asyncio.run(
-            _send_telegram("tok", "123", "<b>Hello</b> world")
-        )
-
-        bot.send_message.assert_awaited_once()
-        kwargs = bot.send_message.await_args.kwargs
-        assert kwargs["parse_mode"] == "HTML"
-        assert kwargs["text"] == "<b>Hello</b> world"
-
-
-    def test_transient_bad_gateway_retries_text_send(self, monkeypatch):
-        bot = self._make_bot()
-        bot.send_message = AsyncMock(
-            side_effect=[
-                Exception("502 Bad Gateway"),
-                SimpleNamespace(message_id=2),
-            ]
-        )
-        _install_telegram_mock(monkeypatch, bot)
-
-        with patch("asyncio.sleep", new=AsyncMock()) as sleep_mock:
-            result = asyncio.run(_send_telegram("tok", "123", "hello"))
-
-        assert result["success"] is True
-        assert bot.send_message.await_count == 2
-        sleep_mock.assert_awaited_once()
-
-
-class TestSendTelegramThreadIdMapping:
-    """General-topic mapping in _send_telegram (issue #22267).
-
-    Telegram forum supergroups address the General topic as
-    ``message_thread_id="1"`` on incoming updates, but the Bot API rejects
-    sends with ``message_thread_id=1`` ("Message thread not found"). The
-    gateway adapter's ``_message_thread_id_for_send`` helper maps "1" to
-    ``None`` for that reason; the standalone ``_send_telegram`` helper used
-    by the ``send_message`` tool needs the same mapping.
-    """
-
-    def _make_bot(self):
-        bot = MagicMock()
-        bot.send_message = AsyncMock(return_value=SimpleNamespace(message_id=1))
-        return bot
-
-    def test_general_topic_thread_id_omitted(self, monkeypatch):
-        """thread_id="1" must be dropped before calling the Bot API."""
-        bot = self._make_bot()
-        _install_telegram_mock(monkeypatch, bot)
-
-        asyncio.run(_send_telegram("tok", "-1001234567890", "hello", thread_id="1"))
-
-        bot.send_message.assert_awaited_once()
-        kwargs = bot.send_message.await_args.kwargs
-        assert "message_thread_id" not in kwargs
-
-    def test_non_general_topic_thread_id_preserved(self, monkeypatch):
-        """Real forum-topic thread ids (>1) still pass through as ints."""
-        bot = self._make_bot()
-        _install_telegram_mock(monkeypatch, bot)
-
-        asyncio.run(_send_telegram("tok", "-1001234567890", "hello", thread_id="17585"))
-
-        kwargs = bot.send_message.await_args.kwargs
-        assert kwargs["message_thread_id"] == 17585
-
-    def test_thread_not_found_retries_without_message_thread_id(self, monkeypatch):
-        """When send_message raises "thread not found", retry without thread_id (#27012)."""
-        bot = self._make_bot()
-        _install_telegram_mock(monkeypatch, bot)
-
-        # First call raises thread-not-found, second succeeds
-        bot.send_message = AsyncMock(side_effect=[
-            Exception("Bad Request: message thread not found"),
-            SimpleNamespace(message_id=2),
-        ])
-
-        asyncio.run(
-            _send_telegram("tok", "-1001234567890", "hello", thread_id="17585")
-        )
-
-        assert bot.send_message.await_count == 2
-        # First call: should include message_thread_id=17585
-        call1_kwargs = bot.send_message.await_args_list[0].kwargs
-        assert call1_kwargs["message_thread_id"] == 17585
-        # Second call (retry): should NOT include message_thread_id
-        call2_kwargs = bot.send_message.await_args_list[1].kwargs
-        assert "message_thread_id" not in call2_kwargs
-
-    def test_thread_not_found_for_media_retries_without_message_thread_id(self, monkeypatch, tmp_path):
-        """Media send with stale thread_id retries without it (#27012)."""
-        bot = self._make_bot()
-        # Mock send_document to fail with thread-not-found, then succeed
-        bot.send_document = AsyncMock(side_effect=[
-            Exception("Bad Request: message thread not found"),
-            SimpleNamespace(message_id=3),
-        ])
-        _install_telegram_mock(monkeypatch, bot)
-
-        # Create a test file
-        test_file = tmp_path / "doc.txt"
-        test_file.write_text("test content")
-
-        asyncio.run(
-            _send_telegram(
-                "tok", "-1001234567890", "",
-                media_files=[(str(test_file), False)],
-                thread_id="17585",
-            )
-        )
-
-        assert bot.send_document.await_count == 2
-        # First call: should include message_thread_id=17585
-        call1_kwargs = bot.send_document.await_args_list[0].kwargs
-        assert call1_kwargs["message_thread_id"] == 17585
-        # Second call (retry): should NOT include message_thread_id
-        call2_kwargs = bot.send_document.await_args_list[1].kwargs
-        assert "message_thread_id" not in call2_kwargs
 
 
 # ---------------------------------------------------------------------------
@@ -1146,7 +822,6 @@ class TestSendDiscordMedia:
         assert mock_session.post.call_count == 2
 
 
-
 class TestSendToPlatformDiscordMedia:
     """_send_to_platform routes Discord media correctly."""
 
@@ -1176,7 +851,6 @@ class TestSendToPlatformDiscordMedia:
         assert len(call_log) == 2  # Message was chunked
         assert call_log[0]["media_files"] == []  # First chunk: no media
         assert call_log[1]["media_files"] == [("/fake/img.png", False)]  # Last chunk: media attached
-
 
 
 # ---------------------------------------------------------------------------
@@ -1263,7 +937,6 @@ class TestSendDiscordForum:
 
         assert "error" in result
         assert "403" in result["error"]
-
 
 
 # ---------------------------------------------------------------------------
@@ -1515,37 +1188,6 @@ class TestSendViaAdapterStandaloneFallback:
             standalone_sender_fn=send_fn,
         )
 
-    @pytest.mark.asyncio
-    async def test_live_ntfy_adapter_receives_explicit_publish_topic(self, monkeypatch):
-        from tools.send_message_tool import _send_via_adapter
-
-        platform = Platform("ntfy")
-        recorded = {}
-
-        class Adapter:
-            async def send(self, *, chat_id, content, metadata=None):
-                recorded["chat_id"] = chat_id
-                recorded["content"] = content
-                recorded["metadata"] = metadata
-                return SimpleNamespace(success=True, message_id="ntfy-id")
-
-        runner = SimpleNamespace(adapters={platform: Adapter()})
-        fake_gateway_run = ModuleType("gateway.run")
-        fake_gateway_run._gateway_runner_ref = lambda: runner
-        monkeypatch.setitem(sys.modules, "gateway.run", fake_gateway_run)
-
-        result = await _send_via_adapter(
-            platform,
-            SimpleNamespace(extra={"publish_topic": "configured-topic"}),
-            "alerts-channel",
-            "done",
-        )
-
-        assert result == {"success": True, "message_id": "ntfy-id"}
-        assert recorded["chat_id"] == "alerts-channel"
-        assert recorded["content"] == "done"
-        assert recorded["metadata"] == {"publish_topic": "alerts-channel"}
-
 
     @pytest.mark.asyncio
     async def test_standalone_sender_fn_raises_is_caught_and_formatted(self, monkeypatch):
@@ -1594,54 +1236,6 @@ class TestSendViaAdapterStandaloneFallback:
             platform_registry.unregister("fakeplatform")
 
         assert result["success"] is True and sent == [("chat-1", "hi")]
-
-class TestSendTelegramThreadNotFoundRetry:
-    """Tests for thread-not-found retry behaviour in _send_telegram (#27012)."""
-
-
-    def test_disable_web_page_preview_not_leaked_to_media_sends(self):
-        """disable_web_page_preview must never leak into a media send.
-
-        A single captionable file + short text now rides as the document's
-        caption (no separate text send), so the invariant to protect is that
-        the captioned send_document does not inherit disable_web_page_preview
-        (valid only for send_message).
-        """
-        media_kwargs_seen = []
-
-        class FakeBot:
-            async def send_message(self, **kwargs):
-                return SimpleNamespace(message_id=1)
-
-            async def send_document(self, **kwargs):
-                media_kwargs_seen.append(kwargs)
-                return SimpleNamespace(message_id=2)
-
-        import tempfile
-        media_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tf:
-                tf.write(b"%PDF-1.4 test content")
-                media_path = tf.name
-
-            async def run_test():
-                with patch("telegram.Bot", return_value=FakeBot()):
-                    return await _send_telegram(
-                        "fake-token", "-100123", "check preview",
-                        media_files=[(media_path, False)],
-                        disable_link_previews=True,
-                    )
-
-            result = asyncio.run(run_test())
-            assert result["success"] is True
-            # Caption rides the document bubble.
-            assert media_kwargs_seen[0].get("caption") == "check preview"
-            # Media send must NOT carry disable_web_page_preview.
-            assert "disable_web_page_preview" not in media_kwargs_seen[0], \
-                "disable_web_page_preview leaked into send_document kwargs"
-        finally:
-            if media_path and os.path.exists(media_path):
-                os.unlink(media_path)
 
 
 def test_not_configured_error_names_resolved_home_and_consulted_sources(tmp_path, monkeypatch):

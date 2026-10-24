@@ -28,7 +28,7 @@ from generate_conformance_vectors import (
     generate,
 )
 
-PLATFORMS = ("discord", "slack", "telegram", "whatsapp")
+PLATFORMS = ("discord", "slack", "whatsapp")
 
 
 def test_corpus_ids_unique_and_categorized():
@@ -50,8 +50,6 @@ def test_oracles_importable_and_self_free():
         assert isinstance(out, str) and out, platform
 
 
-
-
 def test_vector_files_shape(tmp_path):
     generate(tmp_path)
     for platform in PLATFORMS:
@@ -68,10 +66,6 @@ def test_vector_files_shape(tmp_path):
                 assert v.get("note"), f"{platform}/{v['id']}: divergent needs a note"
             ids.add(v["id"])
         assert len(ids) == len(doc["vectors"])
-
-
-
-
 
 
 def test_committed_vectors_match_regeneration(tmp_path):

@@ -1334,12 +1334,6 @@ class TestHomeChannelEnvOverrides:
                 {"EMAIL_HOME_ADDRESS": "user@test.com", "EMAIL_HOME_ADDRESS_NAME": "Inbox"},
                 ("user@test.com", "Inbox"),
             ),
-            (
-                Platform.SMS,
-                PlatformConfig(enabled=True, api_key="token_abc"),
-                {"SMS_HOME_CHANNEL": "+15559876543", "SMS_HOME_CHANNEL_NAME": "My Phone"},
-                ("+15559876543", "My Phone"),
-            ),
         ]
 
         for platform, platform_config, env, expected in cases:
@@ -1635,10 +1629,8 @@ class TestTopLevelBlockVsAuthoredExtra:
         ("slack", {"strict_mention": True, "extra": {"strict_mention": False}}, {}, None, None),
         ("slack", {"strict_mention": True}, {"strict_mention": True}, None, None),
         ("slack", {"reply_to_mode": "all"}, {}, None, None),
-        ("telegram", {"extra": {"require_mention": False}}, {"require_mention": True}, False, None),
-        ("telegram", {"extra": {"require_mention": False}}, {"require_mention": True}, False, "false"),
     ], ids=["direct", "subdict", "fill", "block-own-extra", "equal", "no-bridged-key",
-            "telegram-global-fallback", "operator-env"])
+])
     def test_yaml_owner_reaches_adapter(self, platform, block, authored, global_value,
                                        operator_env, tmp_path, monkeypatch, caplog):
         import json
@@ -1679,19 +1671,11 @@ class TestTopLevelBlockVsAuthoredExtra:
         if "free_response_channels" in block:
             assert os.environ["SLACK_THREAD_REQUIRE_MENTION"] == "true"
             assert os.environ["SLACK_FREE_RESPONSE_CHANNELS"] == "C1,C2"
-        if platform == "telegram":
-            from gateway.platform_registry import platform_registry
-            entry = next(e for e in platform_registry.all_entries() if e.name == "telegram")
-            cls = entry.adapter_factory.__globals__["TelegramAdapter"]
-            adapter = cls.__new__(cls)
-            adapter.config = PlatformConfig.from_dict(data["platforms"][platform])
-            assert adapter._telegram_require_mention() is (operator_env is None)
-            assert os.environ["TELEGRAM_REQUIRE_MENTION"] == (operator_env or "true")
 
     @pytest.mark.parametrize("source,platform", [
         *((source, "slack") for source in ("legacy", "root", "root-extra", "nested",
           "managed-extra", "mixed", "dict-disjoint", "dict-overlap", "root-sibling")),
-        ("root-sibling", "discord"), ("root-sibling", "telegram"),
+        ("root-sibling", "discord"),
     ])
     def test_configuration_layer_owner(self, source, platform, tmp_path, monkeypatch, caplog):
         import json
@@ -1755,11 +1739,3 @@ class TestTopLevelBlockVsAuthoredExtra:
             assert not [r for r in caplog.records if "took precedence" in r.getMessage()]
         if source == "root-sibling" and platform == "discord":
             assert os.environ["DISCORD_ALLOWED_USERS"] == "U_ADMIN"
-        if source == "root-sibling" and platform == "telegram":
-            from gateway.platform_registry import platform_registry
-            entry = next(e for e in platform_registry.all_entries() if e.name == "telegram")
-            cls = entry.adapter_factory.__globals__["TelegramAdapter"]
-            adapter = cls.__new__(cls)
-            adapter.config = config.platforms[Platform.TELEGRAM]
-            assert adapter._telegram_require_mention() is True
-            assert os.environ["TELEGRAM_REQUIRE_MENTION"] == "true"

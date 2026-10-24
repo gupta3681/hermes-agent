@@ -23,7 +23,7 @@ import pytest
 from gateway.config import PlatformConfig, Platform
 from gateway.run_plugin_rewire import GatewayPluginRewireMixin
 from hermes_cli.plugins import PluginContext, PluginManager, PluginManifest, discover_plugins, get_plugin_manager
-from plugins.platforms.telegram.adapter import TelegramAdapter
+from plugins.platforms.whatsapp.adapter import WhatsAppAdapter
 
 
 def _write_plugin(home: Path, name: str = "late_cmd") -> None:
@@ -33,7 +33,7 @@ def _write_plugin(home: Path, name: str = "late_cmd") -> None:
     (d / "__init__.py").write_text(textwrap.dedent('''
         def register(ctx):
             ctx.register_command("late", lambda raw: "hi", description="late")
-            ctx.register_platform_handler("telegram", lambda app, adapter: None)
+            ctx.register_platform_handler("whatsapp", lambda app, adapter: None)
     '''))
     (home / "config.yaml").write_text(f"plugins:\n  enabled: [{name}]\n")
 
@@ -48,7 +48,7 @@ def test_on_plugin_loaded_fires_with_activation_summary_after_a_late_load():
     discover_plugins(force=True)  # the mid-run load
     late = [e for e in events[-1] if e["name"] == "late_cmd"]
     assert late == [{"name": "late_cmd", "key": "late_cmd",
-                     "activated_now": {"gateway_commands": ["late"], "callbacks": ["telegram"]},
+                     "activated_now": {"gateway_commands": ["late"], "callbacks": ["whatsapp"]},
                      "deferred": {"tools": ["late_tool"]}}]
     assert len(events) == 1  # only the sweep that added it fires — and only for the newcomer
     discover_plugins(force=True)  # nothing new: no event (the gateway re-wire is not spammed)
@@ -62,13 +62,13 @@ def _factory_manager(calls: list, plugin: str = "p") -> PluginManager:
 
     def factory(native, adapter):
         calls.append(native)
-    ctx.register_platform_handler("telegram", factory)
+    ctx.register_platform_handler("whatsapp", factory)
     return mgr
 
 
 def test_rewire_is_idempotent_per_native_client():
     calls: list = []
-    adapter = TelegramAdapter(PlatformConfig(enabled=True, token="t", extra={}))
+    adapter = WhatsAppAdapter(PlatformConfig(enabled=True, token="t", extra={}))
     with patch("hermes_cli.plugins.get_plugin_manager", return_value=_factory_manager(calls)):
         adapter.rewire_plugin_handlers()  # before connect wired anything: nothing to do
         assert calls == []
@@ -93,24 +93,6 @@ class _PtbApp:
 
     def add_handler(self, handler, group: int = 0):
         self.handlers.setdefault(group, []).append(handler)
-
-
-def test_telegram_late_plugin_handler_precedes_core_catch_all():
-    app = _PtbApp()
-    adapter = TelegramAdapter(PlatformConfig(enabled=True, token="t", extra={}))
-    plugin_handler = object()
-    mgr = PluginManager()
-    ctx = PluginContext(manifest=PluginManifest(name="p", version="0", description=""), manager=mgr)
-    with patch("hermes_cli.plugins.get_plugin_manager", return_value=mgr):
-        adapter._wire_plugin_handlers(app)  # connect(): plugins first (none yet), then core
-        adapter._register_handlers(app)
-        core = list(app.handlers[0])  # text catch-all, COMMAND catch-all, ..., CallbackQueryHandler
-        ctx.register_platform_handler("telegram", lambda a, _adapter: a.add_handler(plugin_handler))
-        adapter.rewire_plugin_handlers()
-        adapter.rewire_plugin_handlers()
-    group0 = app.handlers[0]
-    assert group0 == [plugin_handler] + core  # ahead of every core catch-all, core order untouched
-    assert app.handlers[99] and plugin_handler not in app.handlers[99]  # the group-99 observer stays alone
 
 
 def test_slack_late_action_handler_registers_one_listener():

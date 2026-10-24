@@ -3,7 +3,6 @@
 
 from hermes_cli.commands import GATEWAY_KNOWN_COMMANDS, SUBCOMMANDS, gateway_help_lines, resolve_command
 from hermes_cli.commands_completion import SlashCommandCompleter
-from hermes_cli.commands_platforms import telegram_bot_commands
 from prompt_toolkit.completion import CompleteEvent
 from prompt_toolkit.document import Document
 
@@ -23,7 +22,6 @@ def test_approvals_registry_drives_help_menu_and_autocomplete():
     assert SUBCOMMANDS["/approvals"] == ["manual", "smart", "off"]
     assert "approvals" in GATEWAY_KNOWN_COMMANDS
     assert any("/approvals" in line for line in gateway_help_lines())
-    assert "approvals" in {name for name, _ in telegram_bot_commands()}
     assert _completions("/approvals ") == {"manual", "smart", "off"}
 
 
@@ -47,5 +45,3 @@ def test_shared_command_refuses_managed_mode_override(tmp_path, monkeypatch):
     assert result.changed is False
     assert "managed" in result.message.lower()
     assert not (home / "config.yaml").exists()
-
-

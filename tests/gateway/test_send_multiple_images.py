@@ -89,45 +89,6 @@ class TestBaseDefaultLoop:
         assert a.sent_files[0][1] == str(local)
 
 
-from plugins.platforms.telegram.adapter import TelegramAdapter
-
-
-class TestTelegramMultiImage:
-    @pytest.fixture
-    def adapter(self):
-        config = PlatformConfig(enabled=True, token="fake-token")
-        a = TelegramAdapter(config)
-        a._bot = MagicMock()
-        a._bot.send_media_group = AsyncMock(return_value=[MagicMock(message_id=1)])
-        return a
-
-    def test_single_batch_under_10_calls_send_media_group_once(self, adapter):
-        """3 photos → one send_media_group call with 3 items."""
-        import telegram
-        images = [(f"https://x.com/{i}.png", f"alt{i}") for i in range(3)]
-        # Make InputMediaPhoto a concrete class that records its args
-        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media, "caption": caption})
-
-        _run(adapter.send_multiple_images("12345", images))
-
-        adapter._bot.send_media_group.assert_awaited_once()
-        call_kwargs = adapter._bot.send_media_group.call_args.kwargs
-        assert call_kwargs["chat_id"] == 12345
-        assert len(call_kwargs["media"]) == 3
-
-    def test_batch_over_10_chunks(self, adapter):
-        """15 photos → two send_media_group calls (10 + 5)."""
-        import telegram
-        images = [(f"https://x.com/{i}.png", "") for i in range(15)]
-        telegram.InputMediaPhoto = MagicMock(side_effect=lambda media, caption=None: {"media": media})
-
-        _run(adapter.send_multiple_images("12345", images))
-
-        assert adapter._bot.send_media_group.await_count == 2
-        sizes = [len(c.kwargs["media"]) for c in adapter._bot.send_media_group.await_args_list]
-        assert sizes == [10, 5]
-
-
 # ---------------------------------------------------------------------------
 # Discord
 # ---------------------------------------------------------------------------
@@ -404,5 +365,3 @@ class TestEmailMultiImage:
         assert to_addr == "user@example.com"
         assert len(file_paths) == 3
         assert "alt 0" in body
-
-

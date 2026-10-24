@@ -49,38 +49,6 @@ class TimedOut(Exception):
     pass
 
 
-def _telegram_classifier():
-    from plugins.platforms.telegram.adapter import TelegramAdapter
-
-    return TelegramAdapter._looks_like_auth_error
-
-
-class TestTelegramAuthClassification:
-    """InvalidToken/Forbidden are terminal; transient transports are not."""
-
-    def test_invalid_token_is_auth_error(self):
-        # Classifier matches on class name so tests do not need real
-        # telegram.error types — mirrors _looks_like_network_error's design.
-        assert _telegram_classifier()(InvalidToken("401 Unauthorized")) is True
-
-    def test_forbidden_is_auth_error(self):
-        assert _telegram_classifier()(Forbidden("bot was deleted")) is True
-
-    def test_network_error_is_not_auth_error(self):
-        assert _telegram_classifier()(NetworkError("dns failure")) is False
-
-
-    def test_generic_exception_is_not_auth_error(self):
-        # Unknown types must stay retryable — a false terminal recreates the
-        # "silently dead bot" problem the auto-pause removal fixed.
-        assert _telegram_classifier()(RuntimeError("weird")) is False
-
-    def test_auth_message_text_does_not_classify(self):
-        # Guard against text matching creeping back in: an exception whose
-        # MESSAGE mentions auth but whose type is generic must stay retryable.
-        assert _telegram_classifier()(RuntimeError("InvalidToken Forbidden")) is False
-
-
 # ── Discord: connect exception classification ──────────────────────────
 
 
@@ -132,8 +100,6 @@ class TestDiscordConnectClassification:
 
 
 # ── Photon: typed sidecar startup errors ───────────────────────────────
-
-
 
 
 # ── Email: explicit fatal codes on IMAP/SMTP failure ───────────────────

@@ -17,7 +17,6 @@ class TestPlatformEnumDynamic:
     """Test that Platform enum accepts unknown values for plugin platforms."""
 
 
-
     def test_dynamic_member_case_normalised(self):
         """Mixed case normalised to lowercase."""
         a = Platform("A2A")
@@ -276,11 +275,7 @@ class TestGatewayConfigPluginPlatform:
 # ── Extended PlatformEntry fields ─────────────────────────────────────
 
 
-
-
 # ── Cron platform resolution ─────────────────────────────────────────
-
-
 
 
 # ── platforms.py integration ──────────────────────────────────────────
@@ -311,8 +306,6 @@ class TestPlatformsMerge:
 
 
 # ── apply_yaml_config_fn (PlatformEntry field + load_gateway_config dispatch) ──
-
-
 
 
 class TestApplyYamlConfigFnDispatch:
@@ -390,8 +383,6 @@ class TestApplyYamlConfigFnDispatch:
         finally:
             _reg.unregister("mybadplat")
             _reg.unregister("mygoodplat")
-
-
 
 
 class TestPluginPlatformSharedKeyBridge:
@@ -653,7 +644,7 @@ class TestMigratedPlatformWiring:
     """
 
     _LAZY_INSTALLABLE = (
-        "teams", "telegram", "discord", "slack",
+        "teams", "discord", "slack",
         "matrix", "dingtalk", "feishu", "wecom_callback",
         "google_chat",
     )

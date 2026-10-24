@@ -1,4 +1,4 @@
-"""Gateway platform command derivations (Telegram / Discord / Slack) from ``COMMAND_REGISTRY``.
+"""Gateway platform command derivations (Discord / Slack) from ``COMMAND_REGISTRY``.
 """
 
 from __future__ import annotations
@@ -17,40 +17,11 @@ logger = logging.getLogger("hermes_cli.commands")
 
 _CMD_NAME_LIMIT = 32  # max command name length shared by Telegram and Discord
 
-_TG_INVALID_CHARS = re.compile(r"[^a-z0-9_]")
-_TG_MULTI_UNDERSCORE = re.compile(r"_{2,}")
-
 
 def _gateway_available_commands() -> list:
     """Registry entries visible on gateway surfaces (config gates read once)."""
     overrides = _resolve_config_gates()
     return [cmd for cmd in COMMAND_REGISTRY if _is_gateway_available(cmd, overrides)]
-
-
-def _requires_argument(args_hint: str) -> bool:
-    """True when selecting a command without text would be incomplete."""
-    return args_hint.strip().startswith("<")
-
-
-def _sanitize_telegram_name(raw: str) -> str:
-    """Telegram allows only ``[a-z0-9_]``: lowercase, hyphens -> ``_``, collapse/strip ``_``.
-    A name that would lose letters (``中文helper`` -> ``helper``) is omitted (``""``): the menu
-    entry could not resolve back to the registered ``/中文helper`` and would answer
-    "Unknown command"."""
-    lowered = raw.lower().replace("-", "_")
-    name = _TG_INVALID_CHARS.sub("", lowered)
-    if any(ch.isalnum() for ch in _TG_INVALID_CHARS.findall(lowered)):
-        return ""
-    return _TG_MULTI_UNDERSCORE.sub("_", name).strip("_")
-
-
-_TG_DASHES = re.compile("[\u2012\u2013\u2014\u2015\u2212]")
-
-
-def _normalize_telegram_desc(desc: str) -> str:
-    """Fold Unicode dashes (em/en/figure/horizontal-bar/minus) to ASCII ``-``.
-    BotFather rejects setMyCommands descriptions containing them (#2925)."""
-    return _TG_DASHES.sub("-", desc)
 
 
 def _truncate_desc(desc: str, limit: int) -> str:
@@ -87,102 +58,8 @@ def _clamp_command_names(
 
 # --- Telegram ---------------------------------------------------------------
 
-def telegram_bot_commands(*, include_plugins: bool = True) -> list[tuple[str, str]]:
-    """(command_name, description) pairs for Telegram setMyCommands: sanitized canonical names
-    only (no aliases). Built-ins needing arguments are included (their handlers show usage when
-    selected bare); plugin commands needing arguments are excluded (may lack a no-arg fallback)."""
-    pairs = [(cmd.name, cmd.describe()) for cmd in _gateway_available_commands()]
-    if include_plugins:
-        pairs += [(n, d) for n, d, hint in _iter_plugin_command_entries()
-                  if not _requires_argument(hint)]
-    return [(tg, _normalize_telegram_desc(desc)) for name, desc in pairs if (tg := _sanitize_telegram_name(name))]
-
 
 # Telegram allows 100 BotCommands; the 60-slot default keeps every built-in plus common skill
-# commands under the ~4KB payload limit (platforms.telegram.extra.command_menu.max_commands).
-_DEFAULT_TELEGRAM_MENU_MAX_COMMANDS = 60
-_TELEGRAM_BOT_API_MAX_COMMANDS = 100
-# priority_mode -> rank tables consulted in order ("configured" = user list,
-# "default" = _TELEGRAM_MENU_PRIORITY); unranked candidates keep stable order after.
-_TELEGRAM_PRIORITY_TIERS: dict[str, tuple[str, ...]] = {
-    "prepend": ("configured", "default"), "append": ("default", "configured"),
-    "replace": ("configured",)}
-
-# Built-ins that must survive Telegram's small visible menu cap (everything else stays
-# dispatchable when typed). Order = rank: everyday, maintenance, mid-turn control, operational.
-_TELEGRAM_MENU_PRIORITY = (
-    "help", "new", "stop", "status", "egress", "resume", "sessions", "model",
-    "debug", "restart", "update", "verbose", "commands",
-    "approve", "deny", "queue", "steer", "bg", "btw",
-    "reasoning", "usage", "platforms", "platform", "profile", "whoami")
-
-
-def _telegram_command_menu_config() -> dict[str, Any]:
-    """Normalized ``platforms.telegram.extra.command_menu`` config with safe defaults."""
-    try:
-        from hermes_cli.config import read_raw_config
-        node: Any = read_raw_config() or {}
-    except Exception:
-        node = {}
-    for key in ("platforms", "telegram", "extra", "command_menu"):
-        node = node.get(key) if isinstance(node, Mapping) else None
-    menu_cfg: Mapping[str, Any] = node if isinstance(node, Mapping) else {}
-    try:
-        max_commands = int(menu_cfg.get("max_commands", _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS))
-    except (TypeError, ValueError):
-        max_commands = _DEFAULT_TELEGRAM_MENU_MAX_COMMANDS
-    priority_mode = str(menu_cfg.get("priority_mode") or "prepend").strip().lower()
-    raw_priority = menu_cfg.get("priority")
-    if isinstance(raw_priority, list):
-        priority = [str(item) for item in raw_priority if str(item).strip()]
-    else:
-        priority = [raw_priority] if isinstance(raw_priority, str) and raw_priority.strip() else []
-    return {
-        "max_commands": max(1, min(_TELEGRAM_BOT_API_MAX_COMMANDS, max_commands)),
-        "priority_mode": priority_mode if priority_mode in _TELEGRAM_PRIORITY_TIERS else "prepend",
-        "priority": priority}
-
-
-def telegram_menu_max_commands() -> int:
-    """Return configured Telegram BotCommand menu cap with safe bounds."""
-    return int(_telegram_command_menu_config()["max_commands"])
-
-
-def _sanitized_rank(raw_names: Sequence[str]) -> dict[str, int]:
-    """name -> rank for the deduped, Telegram-sanitized *raw_names* (first occurrence wins)."""
-    rank: dict[str, int] = {}
-    for raw in raw_names:
-        name = _sanitize_telegram_name(str(raw))
-        if name and name not in rank:
-            rank[name] = len(rank)
-    return rank
-
-
-def _prioritize_telegram_menu_candidates(
-    candidates: list[tuple[str, str, str, str]]) -> list[tuple[str, str, str, str]]:
-    """Order ``(final_name, description, source, raw_name)`` candidates; the default priority
-    applies to core only, "replace" mode ignores it. ``raw_name`` is the pre-clamp name so a
-    configured long command stays addressable."""
-    menu_cfg = _telegram_command_menu_config()
-    configured_rank = _sanitized_rank(menu_cfg["priority"])
-    default_rank = _sanitized_rank(_TELEGRAM_MENU_PRIORITY)
-    tiers = _TELEGRAM_PRIORITY_TIERS[menu_cfg["priority_mode"]]
-
-    def _rank(stable_index: int, candidate: tuple[str, str, str, str]) -> tuple[int, int, int]:
-        final_name, _desc, source, raw_name = candidate
-        indexes = {
-            "configured": configured_rank.get(raw_name, configured_rank.get(final_name)),
-            "default": default_rank.get(final_name) if source == "core" else None}
-        for tier, table in enumerate(tiers):
-            if indexes[table] is not None:
-                return (tier, indexes[table], stable_index)
-        return (len(tiers), 0, stable_index)
-
-    return [c for _i, c in sorted(enumerate(candidates), key=lambda item: _rank(*item))]
-
-
-# --- Shared skill/plugin collection for gateway platforms -------------------
-
 def _iter_gateway_skills(platform: str):
     """Yield ``(cmd_key, info, rel_parts)`` for skills eligible as gateway slash commands.
 
@@ -262,8 +139,6 @@ def _collect_gateway_skill_entries(
         plugin_cmds = get_plugin_commands()
         for cmd_name in sorted(plugin_cmds):
             meta = plugin_cmds[cmd_name]
-            if platform == "telegram" and _requires_argument(str(meta.get("args_hint") or "")):
-                continue
             yield cmd_name, meta.get("description") or t("slash.shared.plugin_command_desc"), ""
 
     plugin_entries = _entries(_plugin_rows())
@@ -277,25 +152,6 @@ def _collect_gateway_skill_entries(
     remaining = max(0, max_slots - len(plugin_entries))
     hidden_count = max(0, len(skill_entries) - remaining)
     return (plugin_entries + skill_entries[:remaining])[:max_slots], hidden_count
-
-
-def telegram_menu_commands(max_commands: int = 100) -> tuple[list[tuple[str, str]], int]:
-    """``(menu_commands, hidden_count)`` for Telegram, capped to the Bot API limit. Tier order:
-    core CommandDefs, plugin slash commands, skill commands (alphabetical; hub and
-    telegram-disabled skills excluded). Tiers keep relative order unless named in
-    ``platforms.telegram.extra.command_menu.priority`` — applied *before* the cap, so a
-    prioritized dynamic command can displace an unprioritized core command."""
-    core_commands = list(telegram_bot_commands(include_plugins=False))
-    entries, hidden_count = _collect_gateway_skill_entries(
-        platform="telegram", max_slots=None, reserved_names={n for n, _ in core_commands},
-        desc_limit=40, sanitize_name=_sanitize_telegram_name)
-    candidates = [(name, desc, "core", name) for name, desc in core_commands]
-    candidates += [(name, desc, "skill" if cmd_key else "plugin", raw)
-                   for name, desc, cmd_key, raw in entries]
-    candidates = _prioritize_telegram_menu_candidates(candidates)
-    overflow_count = max(0, len(candidates) - max_commands)
-    menu = [(name, _normalize_telegram_desc(desc)) for name, desc, _source, _raw_name in candidates[:max_commands]]
-    return menu, hidden_count + overflow_count
 
 
 # --- Discord ----------------------------------------------------------------

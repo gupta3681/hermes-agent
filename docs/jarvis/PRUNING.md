@@ -158,3 +158,34 @@ immutable-install permissions, and runtime UID/volume initialization. These exer
 real entrypoint, non-root imports, SQLite FTS5 trigram support, writable runtime state,
 and protected application files. All 12 repository checks passed. This verifies the local
 arm64 image; other architectures and production deployment were not exercised.
+
+## Fifth pass: remove the bundled Telegram transport
+
+Removed the complete Telegram adapter package, managed-bot/QR provisioning, interactive
+setup, standalone Bot API sender and retries, Telegram command menu/sanitization helpers,
+rich-message prompt extension, platform action handlers, dedicated transport tests and
+local-wire Telegram eval. The messaging and Termux extras no longer install its SDK;
+PM regenerated `uv.lock`, which no longer contains `python-telegram-bot`. Messaging
+availability now probes the retained Discord, Slack and QR dependencies.
+
+Shared conformance generation no longer imports Telegram. Shared delivery, plugin wiring,
+profile provenance, event authorization and queued-final ledger tests now exercise retained
+adapters or direct shared interfaces. Removed leftover ntfy tests, its publish-topic special
+case, and stale BlueBubbles setup reminders from earlier passes.
+
+Legacy platform identifiers, serialized session/config metadata, SQLite topic bindings and
+relay routing compatibility remain readable. They do not install or provide a Telegram
+transport. Two Jarvis contracts verify that old Telegram configuration cannot create a
+bundled adapter and standalone delivery fails without a registered transport. Independently
+installed platform plugins still use the generic registry; no new multiplayer policy is set.
+
+Remaining candidates include Discord, Slack and Matrix adapters and their setup/dependency
+surfaces. They still have consumers and shared tests, so this pass keeps them. Agent tools,
+MCP, memory, sandbox backends and model providers remain useful from WhatsApp.
+
+Fifth-pass verification: all 617 regression tests passed across 36 files; the final
+sender/conformance rerun passed 33 tests. All 12 repository checks passed, and PM's
+lock check confirms metadata parity. The Linux arm64 image builds as
+`jarvis-smoke:no-telegram`; all 14 container tests passed, including an explicit check
+that the Telegram SDK is absent. Paid model calls, real messaging, production deployment,
+and the opt-in install/update sandbox suite were not exercised.

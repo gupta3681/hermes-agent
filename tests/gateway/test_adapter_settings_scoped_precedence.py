@@ -79,27 +79,17 @@ def test_secondary_reads_own_yaml_and_never_the_launch_env(homes, monkeypatch):
     from plugins.platforms.discord.adapter import DiscordAdapter
     from plugins.platforms.matrix.adapter import MatrixAdapter
     from plugins.platforms.slack.adapter import SlackAdapter
-    from plugins.platforms.telegram import adapter as tg
     with _secondary_scope(secondary):
         cfg = load_gateway_config()
         m = MatrixAdapter(cfg.platforms[Platform.MATRIX])
         d = DiscordAdapter(cfg.platforms[Platform.DISCORD])
         s = SlackAdapter(cfg.platforms[Platform.SLACK])
-        t = tg.TelegramAdapter(cfg.platforms[Platform.TELEGRAM])
         # Omitted keys resolve to the DEFAULT, not the launch profile's bridged env.
         assert (m._process_notices, m._matrix_session_scope) == (False, "auto")
         assert d._reactions_enabled() and s._reactions_enabled() and s._slack_ignored_channels() == set()
-        assert not t._reactions_enabled()
         assert _allowed_mentions(d.config.extra).everyone is False
         # The seeded YAML lists reach the Matrix authz consumers.
         assert m._allowed_user_ids == {"@owner:example.org"} and len(m._ignored_user_patterns) == 1
-        # The secondary's YAML proxy reaches request construction without an env bridge.
-        monkeypatch.setenv("HERMES_TELEGRAM_DISABLE_FALLBACK_IPS", "true")
-        built: list = []
-        with patch.object(tg, "HTTPXRequest", lambda **kw: built.append(kw) or types.SimpleNamespace()), \
-                patch.object(t, "_instrument_polling_request", side_effect=lambda r: r):
-            asyncio.run(t._build_ptb_requests())
-        assert [kw.get("proxy") for kw in built] == ["http://127.0.0.1:18080"] * 2
 
 
 def test_explicit_env_beats_yaml_for_the_owning_profile(homes, monkeypatch):
@@ -110,10 +100,8 @@ def test_explicit_env_beats_yaml_for_the_owning_profile(homes, monkeypatch):
         "discord:\n  allow_mentions:\n    everyone: true\ntelegram:\n  reactions: false\n", encoding="utf-8")
     monkeypatch.setenv("DISCORD_ALLOW_MENTION_EVERYONE", "false")
     monkeypatch.setenv("TELEGRAM_REACTIONS", "true")
-    from plugins.platforms.telegram.adapter import TelegramAdapter
     cfg = load_gateway_config()
     assert _allowed_mentions(cfg.platforms[Platform.DISCORD].extra).everyone is False
-    assert TelegramAdapter(cfg.platforms[Platform.TELEGRAM])._reactions_enabled() is True
 
 
 def test_central_allow_bots_gate_honours_a_secondary_yaml_policy(homes):

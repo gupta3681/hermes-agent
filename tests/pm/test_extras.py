@@ -121,7 +121,6 @@ def synced(monkeypatch):
     return calls
 
 
-
 def test_available_missing_module():
     assert extras.available("no-such-extra-anywhere") is False
 
@@ -203,8 +202,6 @@ def test_ensure_and_bind_preserves_target_on_failure(monkeypatch, failure):
     assert target == ({"existing": "kept", "NAME": 42} if failure is None else {"existing": "kept"})
 
 
-
-
 def test_every_anchor_extra_exists_in_pyproject():
     """Contract: ANCHORS maps real pyproject extras (no orphaned names)."""
     import tomllib
@@ -225,7 +222,7 @@ def test_legacy_selection_carries_extras_the_main_era_venv_lazily_installed(monk
     monkeypatch.setattr(extras, "_PLATFORM_GATES", {"piper": "python_version < '0'"})
     site = tmp_path / "venv" / "lib" / "python3.11" / "site-packages"
     (site / "fal_client").mkdir(parents=True)
-    (site / "telegram").mkdir()
+    (site / "slack_bolt").mkdir()
     (site / "piper").mkdir()
     (site / "google").mkdir()
     (site / "google" / "auth").mkdir()
@@ -235,7 +232,7 @@ def test_legacy_selection_carries_extras_the_main_era_venv_lazily_installed(monk
     selection = extras.legacy_selection(tmp_path)
 
     assert selection[0] == "all"
-    assert {"fal", "telegram", "vertex", "exa"} <= set(selection)
+    assert {"fal", "slack", "vertex", "exa"} <= set(selection)
     assert "messaging" not in selection
     assert "piper" not in selection
     assert "hindsight" not in selection  # Catalog plugin owns this dependency, not a core extra.

@@ -13,7 +13,6 @@ REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 GATEWAY_DIR = REPO_ROOT / "gateway"
 UPDATE_RESPONSE_FILES = (
     REPO_ROOT / "plugins/platforms/discord/adapter.py",
-    REPO_ROOT / "plugins/platforms/telegram/adapter.py",
     REPO_ROOT / "plugins/platforms/feishu/adapter.py",
     REPO_ROOT / "plugins/platforms/whatsapp/adapter.py",
     REPO_ROOT / "plugins/platforms/google_chat/adapter.py",

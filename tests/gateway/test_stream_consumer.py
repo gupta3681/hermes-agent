@@ -10,8 +10,6 @@ from agent.think_scrubber import THINK_TAG_NAMES
 from gateway.stream_consumer import GatewayStreamConsumer, StreamConsumerConfig
 
 
-
-
 # ── _clean_for_display unit tests ────────────────────────────────────────
 
 
@@ -123,7 +121,6 @@ class TestEditMessageFinalizeSignature:
     @pytest.mark.parametrize(
         "module_path,class_name",
         [
-            ("plugins.platforms.telegram.adapter", "TelegramAdapter"),
             ("plugins.platforms.discord.adapter", "DiscordAdapter"),
             ("plugins.platforms.slack.adapter", "SlackAdapter"),
             ("plugins.platforms.matrix.adapter", "MatrixAdapter"),
@@ -1187,8 +1184,6 @@ class TestOnNewMessageCallback:
         assert events == ["reset", "reset", "reset"]
 
 
-
-
 class TestUtf16OverflowDetection:
     """Regression coverage for #11170 — Telegram counts message length in
     UTF-16 code units, not Python codepoints. A response with supplementary
@@ -1422,7 +1417,6 @@ class TestStripOrphanCloseTags:
         assert GatewayStreamConsumer._strip_orphan_close_tags(text) == text
 
 
-
 class TestConfirmedFinalDeliveryConsultsCommentaryRecord:
     """The gateway's final-send predicate must recognise a final reply the consumer already
     delivered through the commentary path even when the runtime never set ``response_previewed``
@@ -1593,4 +1587,3 @@ class TestFlushPendingSync:
 
         consumer.finish()
         await task
-

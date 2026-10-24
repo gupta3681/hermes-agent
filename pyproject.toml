@@ -268,7 +268,6 @@ daytona = ["daytona==0.155.0"]
 vercel = ["vercel==0.7.2"]
 google-meet = ["playwright==1.62.0; sys_platform != 'android'", "websockets==15.0.1; sys_platform != 'android'"]
 messaging = [
-  "python-telegram-bot[webhooks]==22.8",
   "discord.py[voice]==2.7.1",
   "aiohttp==3.14.5",
   "brotlicffi==1.2.0.2",
@@ -335,7 +334,6 @@ wake = [
 # lazy-installed at first use via pm.ensure_import(name) and therefore
 # deliberately NOT in [all] (see tests/test_project_metadata.py's
 # lazy_covered_extras list — keep that list in sync when adding here).
-telegram = ["python-telegram-bot[webhooks]==22.8"]
 discord = ["discord.py[voice]==2.7.1"]
 # stt-whisper + audio-io compose [voice] (faster-whisper / sounddevice / numpy).
 stt-whisper = [
@@ -444,7 +442,6 @@ vertex = ["google-auth==2.55.1"]
 azure-identity = ["azure-identity==1.25.3"]
 termux = [
   # Baseline Android / Termux path for reliable fresh installs.
-  "python-telegram-bot[webhooks]==22.8",
   "hermes-agent[cron]",
   "hermes-agent[mcp]",
   "hermes-agent[acp]",
@@ -452,7 +449,7 @@ termux = [
 termux-all = [
   # Best-effort "install all" profile for Termux. Same policy as [all]:
   # only includes extras that are not prepared on demand by PM.
-  # Backends like telegram/slack/dingtalk/feishu lazy-install at
+  # Backends like slack/dingtalk/feishu lazy-install at
   # first use, so they're no longer eager-installed here.
   "hermes-agent[termux]",
   "hermes-agent[google]",
@@ -512,7 +509,7 @@ all = [
   #
   # Removed from [all] on 2026-05-12 (covered by lazy-install):
   #   anthropic, exa, firecrawl, parallel-web, fal, edge-tts,
-  #   modal, daytona, vercel, messaging (telegram/discord/slack),
+  #   modal, daytona, vercel, messaging (discord/slack),
   #   matrix, slack, honcho, voice (faster-whisper),
   #   dingtalk, feishu, bedrock, tts-premium (elevenlabs)
   #

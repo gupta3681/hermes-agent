@@ -52,42 +52,6 @@ class TestSlashCommands:
         assert "no" in response_lower or "stop" in response_lower or "not running" in response_lower
 
 
-
-
-    @pytest.mark.asyncio
-    async def test_plaintext_restart_gateway_routes_to_safe_restart_command(self, adapter, runner, platform, monkeypatch):
-        if platform != Platform.TELEGRAM:
-            pytest.skip("Plaintext restart shortcut is intentionally DM/Telegram-focused")
-
-        monkeypatch.setenv("INVOCATION_ID", "e2e-systemd")
-        runner.request_restart = MagicMock(return_value=True)
-
-        send = await send_and_capture(adapter, "restart gateway", platform)
-
-        send.assert_called_once()
-        response_text = send.call_args[1].get("content") or send.call_args[0][1]
-        assert "restart" in response_text.lower() or "draining" in response_text.lower()
-        runner.request_restart.assert_called_once_with(detached=False, via_service=True)
-
-    @pytest.mark.asyncio
-    async def test_plaintext_restart_gateway_in_group_stays_plain_text(self, adapter, runner, platform, monkeypatch):
-        if platform != Platform.TELEGRAM:
-            pytest.skip("Shortcut scope is only verified for Telegram here")
-
-        monkeypatch.setenv("INVOCATION_ID", "e2e-systemd")
-        runner.request_restart = MagicMock(return_value=True)
-        runner._handle_message_with_agent = AsyncMock(return_value="agent-handled")
-
-        send = await send_and_capture(adapter, "restart gateway", platform, chat_id="group-chat-1", user_id="u1", chat_type="group")
-
-        send.assert_called_once()
-        response_text = send.call_args[1].get("content") or send.call_args[0][1]
-        assert response_text == "agent-handled"
-        runner.request_restart.assert_not_called()
-
-
-
-
     @pytest.mark.asyncio
     async def test_quick_command_alias_targets_builtin_command_with_args(
         self, adapter, runner, platform
@@ -114,7 +78,6 @@ class TestSlashCommands:
         runner._handle_message_with_agent.assert_not_awaited()
 
 
-
 class TestSessionLifecycle:
     """Verify session state changes across command sequences."""
 
@@ -129,7 +92,6 @@ class TestSessionLifecycle:
         response_text = send.call_args[1].get("content") or send.call_args[0][1]
         # Session ID from the entry should appear in the status output
         assert session_entry.session_id[:8] in response_text
-
 
 
 class TestAuthorization:

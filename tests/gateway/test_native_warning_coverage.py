@@ -296,22 +296,3 @@ async def test_feishu_downgrade_keeps_attachment_and_caption(policy, tmp_path):
     assert "file-key" in frames[0]["payload"]
     assert "Warning: requested caption" in frames[0]["payload"]
     assert ("GIF downgraded to file" in frames[0]["payload"]) is (not policy)
-
-
-@pytest.mark.asyncio
-async def test_telegram_cache_warning_does_not_hide_inbound_context(policy):
-    from plugins.platforms.telegram.adapter import TelegramAdapter
-
-    adapter = TelegramAdapter(PlatformConfig())
-    frames = []
-
-    async def reply_text(text):
-        frames.append(text)
-
-    from gateway.platforms.event import MessageEvent
-    event = MessageEvent(text="Requested content", source=adapter.build_source(chat_id="42", user_id="42"))
-    await adapter._surface_media_cache_failure(SimpleNamespace(reply_text=reply_text), event, "photo", RuntimeError("fixture"))
-    assert bool(frames) is (not policy)
-    assert event.text.startswith("Requested content")
-    assert "could not be downloaded" in event.text
-    assert ("asked to retry" in event.text) is (not policy)

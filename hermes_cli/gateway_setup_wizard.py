@@ -177,34 +177,6 @@ def _prompt_unauthorized_access(platform_key: str) -> None:
         _gw().print_info("  Skipped — configure later with 'hermes gateway setup'")
 
 
-def _telegram_auto_setup(token_var: str) -> tuple[bool, object]:
-    """Offer the managed-bot QR flow. Returns (token_saved, owner_user_id)."""
-    print()
-    _gw()._print_info_lines(
-        "  Telegram can be configured automatically with a managed bot:",
-        "  [1] Automatic (scan QR → confirm in Telegram → done)", "  [2] Manual BotFather token",
-    )
-    if _gw().prompt("  Choice [1/2]", default="1").strip() != "1":
-        return False, None
-    try:
-        from hermes_cli.telegram_managed_bot import (
-            auto_setup_telegram_bot_result, is_valid_telegram_bot_token,
-        )
-    except ImportError:
-        _gw().print_warning("  Automatic setup is unavailable in this install.")
-        return False, None
-    result = auto_setup_telegram_bot_result()
-    if result and is_valid_telegram_bot_token(result.token):
-        _gw().save_env_value(token_var, result.token)
-        _gw().print_success("  Saved TELEGRAM_BOT_TOKEN")
-        return True, result.owner_user_id
-    if result:
-        _gw().print_warning("  Automatic setup returned an invalid Telegram token.")
-    print()
-    _gw().print_info("  Falling back to manual setup...")
-    return False, None
-
-
 def _clean_discord_ids(cleaned: str) -> str:
     """Strip common Discord prefixes (user:123, <@123>, <@!123>) from a comma-separated list."""
     parts = []
@@ -219,22 +191,8 @@ def _clean_discord_ids(cleaned: str) -> str:
     return ",".join(parts)
 
 
-def _prompt_allowlist_var(var: dict, platform_key: str, auto_owner_user_id) -> str | None:
+def _prompt_allowlist_var(var: dict, platform_key: str) -> str | None:
     """Allowlist prompt for one var; returns the saved value or None (open-access prompt shown)."""
-    if "TELEGRAM" in var["name"] and auto_owner_user_id:
-        detected_id = str(auto_owner_user_id)
-        _gw().print_success(f"  Detected your Telegram user ID: {detected_id}")
-        if _gw().prompt_yes_no("  Allow this Telegram account to use the bot?", True):
-            extra = _gw().prompt("  Additional allowed user IDs (comma-separated, optional)", password=False)
-            ids = [detected_id]
-            for uid in extra.replace(" ", "").split(","):
-                if uid and uid not in ids:
-                    ids.append(uid)
-            cleaned = ",".join(ids)
-            _gw().save_env_value(var["name"], cleaned)
-            _gw().print_success("  Saved — only these users can interact with the bot.")
-            return cleaned
-
     _gw()._print_info_lines(
         "  The gateway DENIES all users by default for security.",
         "  Enter user IDs to create an allowlist, or leave empty",
@@ -253,7 +211,7 @@ def _prompt_allowlist_var(var: dict, platform_key: str, auto_owner_user_id) -> s
 
 
 def _setup_standard_platform(platform: dict):
-    """Interactive setup for Telegram, Discord, or Slack."""
+    """Interactive setup for token-based platforms."""
     from hermes_cli.setup_hidden_env import is_setup_hidden_env as _is_setup_hidden_env
     emoji, label, token_var = platform["emoji"], platform["label"], platform["token_var"]
     print_setup_header(f"{emoji} {label}")
@@ -265,12 +223,6 @@ def _setup_standard_platform(platform: dict):
 
     if not confirm_reconfigure(label, token_var):
         return
-
-    auto_token_saved, auto_owner_user_id = False, None
-    if platform.get("key") == "telegram":
-        auto_token_saved, auto_owner_user_id = _telegram_auto_setup(token_var)
-
-    allowed_val_set = None  # Track if user set an allowlist (for home channel offer)
 
     # Skip knobs the setup forms hide (home channel, reply mode, proxy...): they're self-configuring.
     setup_vars = [
@@ -285,14 +237,8 @@ def _setup_standard_platform(platform: dict):
         if existing and var["name"] != token_var:
             _gw().print_info(f"  Current: {existing}")
 
-        if auto_token_saved and var["name"] == token_var:
-            _gw().print_info("  Token saved by automatic setup.")
-            continue
-
         if var.get("is_allowlist"):
-            saved = _prompt_allowlist_var(var, platform.get("key"), auto_owner_user_id)
-            if saved is not None:
-                allowed_val_set = saved
+            _prompt_allowlist_var(var, platform.get("key"))
             continue
 
         value = _gw().prompt(f"  {var['prompt']}", password=var.get("password", False))
@@ -304,14 +250,6 @@ def _setup_standard_platform(platform: dict):
             return
         else:
             _gw().print_info("  Skipped (can configure later)")
-
-    # Offer the first allowlisted user ID as home channel when none is set (Telegram DMs).
-    home_var = f"{label.upper()}_HOME_CHANNEL"
-    home_val = _gw().get_env_value(home_var)
-    if allowed_val_set and not home_val and label == "Telegram":
-        first_id = allowed_val_set.split(",")[0].strip()
-        if first_id:
-            offer_home_channel(home_var, first_id, "your user ID")
 
     print()
     _gw().print_success(f"{emoji} {label} configured!")
