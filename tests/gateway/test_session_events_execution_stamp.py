@@ -4,7 +4,7 @@ from pathlib import Path
 
 import pytest
 
-FIXTURE = Path(__file__).resolve().parents[2] / 'apps' / 'desktop' / 'src' / 'lib' / 'execution-authority.frames.json'
+FIXTURE = Path(__file__).parent / 'fixtures' / 'execution-authority.frames.json'
 
 
 def _projection(frames):

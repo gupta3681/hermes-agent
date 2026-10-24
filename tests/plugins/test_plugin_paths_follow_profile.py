@@ -16,12 +16,7 @@ def _a2a_conversation(home):
     return protocol._conv_path("peer-x")
 
 
-def _photon_auth(home):
-    from plugins.platforms.photon import auth
-    return auth._auth_json_path()
-
-
-_RESOLVERS = {"a2a": _a2a_conversation, "photon": _photon_auth}
+_RESOLVERS = {"a2a": _a2a_conversation}
 
 
 @pytest.mark.parametrize("name", sorted(_RESOLVERS))

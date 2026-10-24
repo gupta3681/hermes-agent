@@ -3,11 +3,11 @@
 Two successive owners (runtime epochs 1 and 2) each run one turn on the same
 session, then the second owner applies an idle ``rename`` mutation and cancels
 the head of a paused queue. The Desktop
-fixture ``apps/desktop/src/lib/execution-authority.frames.json`` is this
+fixture ``tests/gateway/fixtures/execution-authority.frames.json`` is this
 module's output; regenerate it with::
 
     PYTHONPATH=. .venv/bin/python tests/gateway/fixtures/execution_frames_capture.py \
-        apps/desktop/src/lib/execution-authority.frames.json
+        tests/gateway/fixtures/execution-authority.frames.json
 """
 import asyncio
 import json

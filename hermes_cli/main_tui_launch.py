@@ -163,31 +163,13 @@ def _restore_tui_workspace(tui_dir: Path) -> bool:
 
 
 def _ensure_tui_workspace(tui_dir: Path) -> None:
-    """Ensure ``ui-tui/`` exists before it is used as a subprocess cwd (else ``NotADirectoryError``
-    / ``WinError 267`` with no usable message): git-restore first, then abort with recovery steps.
-
-    Without this, a missing workspace falls through to ``subprocess.run(..., cwd=<missing ui-tui>)``, which
-    crashes with ``NotADirectoryError`` (``WinError 267`` on Windows) instead of a usable message (#49145).
-    We first try to self-heal via ``git restore``; only if that can't recover the directory do we abort with
-    concrete manual-recovery steps.
-    """
+    """Refuse an absent frontend without restoring intentionally removed source files."""
     if tui_dir.is_dir():
         return
 
-    if _restore_tui_workspace(tui_dir):
-        if not os.environ.get("HERMES_QUIET"):
-            print(f"Restored missing TUI workspace: {tui_dir}")
-        return
-
     print(
-        "Error: the TUI workspace is missing from this Hermes checkout.\n"
-        f"Expected directory: {tui_dir}\n"
-        "This usually means `hermes update` left tracked ui-tui files deleted.\n"
-        "Recovery:\n"
-        "  1. From the Hermes checkout, run `git restore -- ui-tui`\n"
-        "  2. Run `npm install --silent --no-fund --no-audit --progress=false`\n"
-        "  3. Retry `hermes --tui`\n"
-        "If the checkout is still inconsistent, run `hermes update --force`.",
+        "The terminal UI is not included in this Jarvis checkout. "
+        "Use `hermes --cli` or `hermes gateway run`.",
         file=sys.stderr)
     sys.exit(1)
 

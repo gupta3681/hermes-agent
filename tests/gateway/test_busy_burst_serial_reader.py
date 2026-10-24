@@ -101,27 +101,6 @@ async def test_signal_busy_photos_merge_without_holding_the_reader(monkeypatch, 
     assert await owner.settle(2) == [('', 2)]
 
 
-@pytest.mark.asyncio
-async def test_irc_split_text_merges_through_the_receive_loop(monkeypatch):
-    from gateway import platform_registry
-    from gateway.platform_registry import PlatformEntry, PlatformRegistry
-    from tests.gateway._plugin_adapter_loader import load_plugin_adapter
-    monkeypatch.setenv('IRC_ALLOWED_USERS', 'sender')
-    module = load_plugin_adapter('irc')
-    registry = PlatformRegistry()
-    monkeypatch.setattr(platform_registry, 'platform_registry', registry)
-    module.register(SimpleNamespace(register_platform=lambda **kw: registry.register(PlatformEntry(**kw))))
-    adapter = module.IRCAdapter(PlatformConfig(enabled=True, typing_indicator=False, extra={
-        'server': 'irc.example.invalid', 'nickname': 'testbot', 'allowed_users': ['sender']}))
-    source = adapter.build_source(chat_id='sender', chat_name='sender', chat_type='dm',
-                                  user_id='sender', user_name='sender')
-    owner = await _busy_owner(monkeypatch, adapter, source, busy_text_mode='queue')
-    adapter._reader = asyncio.StreamReader()
-    adapter._reader.feed_data(b':sender!u@h PRIVMSG testbot :first half\r\n'
-                              b':sender!u@h PRIVMSG testbot :second half\r\n')
-    adapter._reader.feed_eof()
-    await asyncio.wait_for(adapter._receive_loop(), 10)
-    assert await owner.settle(2) == [('first half\nsecond half', 0)]
 
 
 @pytest.mark.asyncio

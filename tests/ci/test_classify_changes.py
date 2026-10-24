@@ -460,7 +460,9 @@ def test_every_slow_lane_path_matches_a_tracked_file():
     if tracked.returncode != 0:
         pytest.skip("not a git checkout")
     files = tracked.stdout.splitlines()
-    tables = {**_mod._E2E_LANES, "docker": _mod._DOCKER_PATHS, "nix": _mod._NIX_LANE_PATHS,
+    tables = {"e2e": _mod._E2E_LANES["e2e"],
+              "e2e_upgrade": _mod._E2E_LANES["e2e_upgrade"],
+              "docker": _mod._DOCKER_PATHS,
               "remote_backends": _mod._REMOTE_BACKEND_PATHS}
     dead = {
         (lane, prefix)
@@ -530,10 +532,6 @@ def test_every_update_path_file_starts_the_real_update_suite(path):
     assert classify([path])["e2e_upgrade"], path
 
 
-@pytest.mark.parametrize("path", _DESKTOP_UPDATE_PATH_FILES)
-def test_every_desktop_update_path_file_starts_the_desktop_update_suite(path):
-    assert (_REPO / path).is_file(), f"{path} moved: update the classifier and this table"
-    assert classify([path])["e2e_desktop_update"], path
 
 
 _REPO = Path(__file__).resolve().parents[2]
@@ -595,7 +593,6 @@ def _iter_if_expressions(job: object):
 _REAL_UPDATE_LANES = (
     ("ci.yaml", "tests", "tests.yml", "e2e_upgrade"),
     ("ci.yaml", "tests-os", "tests-os.yml", "e2e_upgrade"),
-    ("ci.yaml", "e2e-desktop-update", "e2e-desktop-update.yml", "e2e_desktop_update"),
     ("tests-os.yml", "install-update-e2e", "windows-install-update-e2e.yml", "e2e_upgrade"),
     # Not an update suite, but the same contract: the real SSH/Docker backend lane.
     ("ci.yaml", "remote-backends", "remote-backends.yml", "remote_backends"),

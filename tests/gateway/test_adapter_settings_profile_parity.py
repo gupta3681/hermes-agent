@@ -70,8 +70,6 @@ _SETTINGS = [
      lambda m: m.FeishuAdapter._load_settings({}).webhook_port),
     ("plugins.platforms.feishu.adapter", "FEISHU_CONNECTION_MODE", "websocket", "webhook",
      lambda m: m.FeishuAdapter._load_settings({}).connection_mode),
-    ("plugins.platforms.bluebubbles.adapter", "BLUEBUBBLES_WEBHOOK_PORT", "18010", "18110",
-     lambda m: m._extra_or_secret({}, "webhook_port", "BLUEBUBBLES_WEBHOOK_PORT", "0")),
     ("plugins.platforms.signal.adapter", "SIGNAL_REACTIONS", "true", "false",
      lambda m: _signal_reactions(m)),
     ("plugins.platforms.line.adapter", "LINE_PORT", "18015", "18115",
@@ -139,18 +137,3 @@ def test_signal_startup_gate_reads_the_profile_env(monkeypatch):
         assert sig.validate_signal_config(PlatformConfig(enabled=True)) is False
     finally:
         ss.reset_secret_scope(token)
-
-
-def test_sms_webhook_listener_is_profile_scoped(monkeypatch):
-    from plugins.platforms.sms import adapter as sms
-    for k, v in {"TWILIO_ACCOUNT_SID": "AC0", "TWILIO_AUTH_TOKEN": "tok", "TWILIO_PHONE_NUMBER": "+1",
-                 "SMS_WEBHOOK_PORT": "18039", "SMS_WEBHOOK_HOST": "default-host", "SMS_WEBHOOK_URL": "http://d/"}.items():
-        monkeypatch.setenv(k, v)
-    ss.set_multiplex_active(True)
-    token = ss.set_secret_scope({"TWILIO_ACCOUNT_SID": "AC1", "TWILIO_AUTH_TOKEN": "tok2", "TWILIO_PHONE_NUMBER": "+2",
-                                 "SMS_WEBHOOK_PORT": "18139", "SMS_WEBHOOK_HOST": "secondary-host", "SMS_WEBHOOK_URL": "http://s/"})
-    try:
-        adapter = sms.SmsAdapter(PlatformConfig(enabled=True))
-    finally:
-        ss.reset_secret_scope(token)
-    assert (adapter._webhook_port, adapter._webhook_host, adapter._webhook_url) == (18139, "secondary-host", "http://s/")

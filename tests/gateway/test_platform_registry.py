@@ -20,10 +20,10 @@ class TestPlatformEnumDynamic:
 
     def test_dynamic_member_case_normalised(self):
         """Mixed case normalised to lowercase."""
-        a = Platform("IRC")
-        b = Platform("irc")
+        a = Platform("A2A")
+        b = Platform("a2a")
         assert a is b
-        assert a.value == "irc"
+        assert a.value == "a2a"
 
     def test_dynamic_member_with_hyphens(self):
         """Registered plugin platforms with hyphens work once registered."""
